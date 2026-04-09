@@ -1,129 +1,193 @@
+const tapSound = new Audio("sounds/tap.mp3");
+tapSound.preload = "auto";
+
+function playTapSound() {
+  tapSound.currentTime = 0;
+  tapSound.play().catch(() => {});
+}
+
 let data = {
-    bacon: {
-        count: Number(localStorage.getItem("baconCount")) || 0,
-        price: Number(localStorage.getItem("baconPrice")) || 5
-    },
-    quack: {
-        count: Number(localStorage.getItem("quackCount")) || 0,
-        price: Number(localStorage.getItem("quackPrice")) || 6
-    },
-    fries: {
-        count: Number(localStorage.getItem("friesCount")) || 0,
-        price: Number(localStorage.getItem("friesPrice")) || 10
-    }
+  corn: { count: Number(localStorage.getItem("cornCount")) || 0, price: 6 },
+  corncheetos: { count: Number(localStorage.getItem("corncheetosCount")) || 0, price: 7 },
+  chiplocos: { count: Number(localStorage.getItem("chiplocosCount")) || 0, price: 8 },
+  chipesquite: { count: Number(localStorage.getItem("chipesquiteCount")) || 0, price: 9 },
+  maruchan: { count: Number(localStorage.getItem("maruchanCount")) || 0, price: 12 },
+  churritos: { count: Number(localStorage.getItem("churritosCount")) || 0, price: 8 },
+  lemonadeclassic: { count: Number(localStorage.getItem("lemonadeclassicCount")) || 0, price: 6 },
+  lemonadeflavor: { count: Number(localStorage.getItem("lemonadeflavorCount")) || 0, price: 7 },
+  lemonadespecial: { count: Number(localStorage.getItem("lemonadespecialCount")) || 0, price: 8 }
 };
 
-let lastUpdated = localStorage.getItem("lastUpdated") || "Not yet";
+let history = JSON.parse(localStorage.getItem("antojitosSalesHistory")) || [];
 
-const baconCountEl = document.getElementById("baconCount");
-const quackCountEl = document.getElementById("quackCount");
-const friesCountEl = document.getElementById("friesCount");
-
-const baconTotalEl = document.getElementById("baconTotal");
-const quackTotalEl = document.getElementById("quackTotal");
-const friesTotalEl = document.getElementById("friesTotal");
-
-const grandTotalEl = document.getElementById("grandTotal");
-const totalItemsEl = document.getElementById("totalItems");
-const lastUpdatedEl = document.getElementById("lastUpdated");
-
-const baconPriceInput = document.getElementById("baconPrice");
-const quackPriceInput = document.getElementById("quackPrice");
-const friesPriceInput = document.getElementById("friesPrice");
-
-baconPriceInput.value = data.bacon.price;
-quackPriceInput.value = data.quack.price;
-friesPriceInput.value = data.fries.price;
+const ids = [
+  "corn",
+  "corncheetos",
+  "chiplocos",
+  "chipesquite",
+  "maruchan",
+  "churritos",
+  "lemonadeclassic",
+  "lemonadeflavor",
+  "lemonadespecial"
+];
 
 function formatMoney(amount) {
-    return `$${amount.toFixed(2)}`;
+  return `$${amount.toFixed(2)}`;
 }
 
-function updateTime() {
-    lastUpdated = new Date().toLocaleString();
+function getTodayLabel() {
+  return new Date().toLocaleDateString();
 }
 
-function saveData() {
-    localStorage.setItem("baconCount", data.bacon.count);
-    localStorage.setItem("baconPrice", data.bacon.price);
+function saveCurrentData() {
+  ids.forEach((id) => {
+    localStorage.setItem(`${id}Count`, data[id].count);
+  });
+  localStorage.setItem("antojitosSalesHistory", JSON.stringify(history));
+}
 
-    localStorage.setItem("quackCount", data.quack.count);
-    localStorage.setItem("quackPrice", data.quack.price);
+function getGrandTotal() {
+  return ids.reduce((sum, id) => sum + data[id].count * data[id].price, 0);
+}
 
-    localStorage.setItem("friesCount", data.fries.count);
-    localStorage.setItem("friesPrice", data.fries.price);
-
-    localStorage.setItem("lastUpdated", lastUpdated);
+function getTotalItems() {
+  return ids.reduce((sum, id) => sum + data[id].count, 0);
 }
 
 function updateScreen() {
-    baconCountEl.textContent = data.bacon.count;
-    quackCountEl.textContent = data.quack.count;
-    friesCountEl.textContent = data.fries.count;
+  ids.forEach((id) => {
+    document.getElementById(`${id}Count`).textContent = data[id].count;
+  });
 
-    baconTotalEl.textContent = formatMoney(data.bacon.count * data.bacon.price);
-    quackTotalEl.textContent = formatMoney(data.quack.count * data.quack.price);
-    friesTotalEl.textContent = formatMoney(data.fries.count * data.fries.price);
+  document.getElementById("grandTotal").textContent = formatMoney(getGrandTotal());
+  document.getElementById("totalItems").textContent = getTotalItems();
+  document.getElementById("todayDate").textContent = getTodayLabel();
+}
 
-    const grandTotal =
-        (data.bacon.count * data.bacon.price) +
-        (data.quack.count * data.quack.price) +
-        (data.fries.count * data.fries.price);
+function renderHistory() {
+  const historyListEl = document.getElementById("historyList");
 
-    const totalItems =
-        data.bacon.count +
-        data.quack.count +
-        data.fries.count;
+  if (history.length === 0) {
+    historyListEl.innerHTML = "<p>No saved days yet.</p>";
+    return;
+  }
 
-    grandTotalEl.textContent = formatMoney(grandTotal);
-    totalItemsEl.textContent = totalItems;
-    lastUpdatedEl.textContent = lastUpdated;
+  historyListEl.innerHTML = "";
+
+  const newestFirst = [...history].reverse();
+
+  newestFirst.forEach((day) => {
+    const entry = document.createElement("div");
+    entry.className = "history-entry";
+
+    entry.innerHTML = `
+      <h3>${day.date}</h3>
+      <p>Corn in Cup: ${day.cornCount} (${formatMoney(day.cornSales)})</p>
+      <p>Corn + Cheetos: ${day.corncheetosCount} (${formatMoney(day.corncheetosSales)})</p>
+      <p>Chip Locos: ${day.chiplocosCount} (${formatMoney(day.chiplocosSales)})</p>
+      <p>Chip Esquite: ${day.chipesquiteCount} (${formatMoney(day.chipesquiteSales)})</p>
+      <p>Maruchan Preparada: ${day.maruchanCount} (${formatMoney(day.maruchanSales)})</p>
+      <p>Churritos Locos: ${day.churritosCount} (${formatMoney(day.churritosSales)})</p>
+      <p>Lemonade Classic: ${day.lemonadeclassicCount} (${formatMoney(day.lemonadeclassicSales)})</p>
+      <p>Lemonade Flavor: ${day.lemonadeflavorCount} (${formatMoney(day.lemonadeflavorSales)})</p>
+      <p>Lemonade Specialty: ${day.lemonadespecialCount} (${formatMoney(day.lemonadespecialSales)})</p>
+      <p><strong>Total Items:</strong> ${day.totalItems}</p>
+      <p><strong>Total Sales:</strong> ${formatMoney(day.grandTotal)}</p>
+    `;
+
+    historyListEl.appendChild(entry);
+  });
 }
 
 function changeCount(item, amount) {
-    data[item].count += amount;
+  data[item].count += amount;
 
-    if (data[item].count < 0) {
-        data[item].count = 0;
-    }
+  if (data[item].count < 0) {
+    data[item].count = 0;
+  }
 
-    updateTime();
-    saveData();
-    updateScreen();
+  playTapSound();
+  saveCurrentData();
+  updateScreen();
 }
 
 function resetDay() {
-    const confirmReset = confirm("Are you sure you want to reset the whole day?");
-    if (!confirmReset) return;
+  const confirmReset = confirm("Are you sure you want to reset today's counts without saving?");
+  if (!confirmReset) return;
 
-    data.bacon.count = 0;
-    data.quack.count = 0;
-    data.fries.count = 0;
+  ids.forEach((id) => {
+    data[id].count = 0;
+  });
 
-    updateTime();
-    saveData();
-    updateScreen();
+  saveCurrentData();
+  updateScreen();
 }
 
-baconPriceInput.addEventListener("input", () => {
-    data.bacon.price = Number(baconPriceInput.value) || 0;
-    updateTime();
-    saveData();
-    updateScreen();
-});
+function saveDay() {
+  const totalItems = getTotalItems();
 
-quackPriceInput.addEventListener("input", () => {
-    data.quack.price = Number(quackPriceInput.value) || 0;
-    updateTime();
-    saveData();
-    updateScreen();
-});
+  if (totalItems === 0) {
+    alert("You have nothing to save yet for today.");
+    return;
+  }
 
-friesPriceInput.addEventListener("input", () => {
-    data.fries.price = Number(friesPriceInput.value) || 0;
-    updateTime();
-    saveData();
-    updateScreen();
-});
+  const today = getTodayLabel();
+
+  const alreadySaved = history.find((entry) => entry.date === today);
+  if (alreadySaved) {
+    const overwrite = confirm("Today's numbers were already saved. Do you want to replace them?");
+    if (!overwrite) return;
+
+    history = history.filter((entry) => entry.date !== today);
+  }
+
+  const daySummary = {
+    date: today,
+
+    cornCount: data.corn.count,
+    cornSales: data.corn.count * data.corn.price,
+
+    corncheetosCount: data.corncheetos.count,
+    corncheetosSales: data.corncheetos.count * data.corncheetos.price,
+
+    chiplocosCount: data.chiplocos.count,
+    chiplocosSales: data.chiplocos.count * data.chiplocos.price,
+
+    chipesquiteCount: data.chipesquite.count,
+    chipesquiteSales: data.chipesquite.count * data.chipesquite.price,
+
+    maruchanCount: data.maruchan.count,
+    maruchanSales: data.maruchan.count * data.maruchan.price,
+
+    churritosCount: data.churritos.count,
+    churritosSales: data.churritos.count * data.churritos.price,
+
+    lemonadeclassicCount: data.lemonadeclassic.count,
+    lemonadeclassicSales: data.lemonadeclassic.count * data.lemonadeclassic.price,
+
+    lemonadeflavorCount: data.lemonadeflavor.count,
+    lemonadeflavorSales: data.lemonadeflavor.count * data.lemonadeflavor.price,
+
+    lemonadespecialCount: data.lemonadespecial.count,
+    lemonadespecialSales: data.lemonadespecial.count * data.lemonadespecial.price,
+
+    totalItems: totalItems,
+    grandTotal: getGrandTotal()
+  };
+
+  history.push(daySummary);
+
+  ids.forEach((id) => {
+    data[id].count = 0;
+  });
+
+  saveCurrentData();
+  updateScreen();
+  renderHistory();
+
+  alert("Day saved and reset for tomorrow.");
+}
 
 updateScreen();
+renderHistory();
