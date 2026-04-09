@@ -1,100 +1,197 @@
 * {
-    box-sizing: border-box;
+  box-sizing: border-box;
 }
 
 body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #fff7c7;
-    color: #222;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #cfeecf;
 }
 
 .app {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 20px 15px 40px;
+  max-width: 900px;
+  margin: auto;
+  padding: 20px;
 }
 
 h1 {
-    text-align: center;
-    margin-bottom: 5px;
+  text-align: center;
+  color: #1f6b3a;
+  margin-bottom: 5px;
 }
 
 .subtitle {
-    text-align: center;
-    margin-top: 0;
-    margin-bottom: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+  color: #1f6b3a;
 }
 
-.item-card,
-.summary-card {
-    background: white;
-    border-radius: 18px;
-    padding: 18px;
-    margin-bottom: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
-h2 {
-    margin-top: 0;
+.tile {
+  position: relative;
+  border-radius: 18px;
+  padding: 20px;
+  text-align: center;
+  color: white;
+  font-weight: bold;
+  overflow: hidden;
+  min-height: 155px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
 }
 
-.price-line {
-    margin-bottom: 12px;
-    font-size: 1rem;
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.45;
+  z-index: 0;
 }
 
-.price-line input {
-    width: 90px;
-    padding: 8px;
-    font-size: 1rem;
-    border: 2px solid #ddd;
-    border-radius: 8px;
+.tile * {
+  position: relative;
+  z-index: 1;
+}
+
+.tile h2 {
+  margin: 0;
+  font-size: 19px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.tile p {
+  margin: 6px 0 0;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 
 .count {
-    font-size: 3rem;
-    font-weight: bold;
-    text-align: center;
-    margin: 10px 0 15px;
+  font-size: 34px;
+  margin-top: 8px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 
-.button-row {
-    display: flex;
-    gap: 10px;
+/* IMAGE CLASSES */
+.corn::before {
+  background-image: url("images/corn.png");
 }
 
-.button-row button,
-.reset-btn {
-    flex: 1;
-    padding: 16px;
-    font-size: 1.1rem;
-    font-weight: bold;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
+.corncheetos::before {
+  background-image: url("images/corncheetos.png");
 }
 
-.button-row button {
-    background: #ffd84d;
+.chiplocos::before {
+  background-image: url("images/chiplocos.png");
 }
 
-.reset-btn {
-    width: 100%;
-    background: #222;
-    color: white;
-    margin-top: 8px;
+.chipesquite::before {
+  background-image: url("images/chipesquite.png");
 }
 
-.item-total {
-    text-align: center;
-    font-size: 1.1rem;
-    margin-top: 14px;
-    font-weight: bold;
+.maruchan::before {
+  background-image: url("images/maruchan.png");
+}
+
+.churritos::before {
+  background-image: url("images/churritos.png");
+}
+
+.lemonade::before {
+  background-image: url("images/lemonade.png");
+}
+
+.summary-card {
+  background: white;
+  padding: 18px;
+  border-radius: 18px;
+  margin-top: 18px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.summary-card h2 {
+  margin-top: 0;
+  color: #1f6b3a;
 }
 
 .grand-total {
-    font-size: 2.5rem;
-    font-weight: bold;
-    text-align: center;
+  font-size: 30px;
+  text-align: center;
+  color: #1f6b3a;
+  font-weight: bold;
+}
+
+.action-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.save-btn {
+  flex: 1;
+  padding: 14px;
+  background: #2d9b57;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.reset-btn {
+  flex: 1;
+  padding: 14px;
+  background: #333;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.history-list {
+  margin-top: 10px;
+}
+
+.history-entry {
+  padding: 10px 0;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.history-entry h3 {
+  margin: 0 0 8px;
+  color: #1f6b3a;
+}
+
+.history-entry p {
+  margin: 4px 0;
+}
+
+@media (max-width: 700px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tile {
+    min-height: 140px;
+    padding: 16px;
+  }
+
+  .tile h2 {
+    font-size: 17px;
+  }
+
+  .count {
+    font-size: 30px;
+  }
 }
