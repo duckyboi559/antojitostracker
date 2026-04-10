@@ -1,65 +1,319 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antojitos Tracker</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <canvas id="confetti"></canvas>
+const ITEMS = [
+  { id: 'chip-locos', name: 'Chip locos', price: 8, img: 'images/chip-locos.png' },
+  { id: 'chip-esquite', name: 'Chip Esquite', price: 9, img: 'images/chip-esquite.png' },
+  { id: 'maruchan-preparada', name: 'Maruchan Preparada', price: 12, img: 'images/maruchan-preparada.png' },
+  { id: 'churritos-locos', name: 'Churritos Locos', price: 8, img: 'images/churritos-locos.png' },
+  { id: 'esquite-vaso', name: 'Esquite en Vaso', price: 6, img: 'images/esquite-en-vaso.png' },
+  { id: 'esquite-cheetos', name: 'Esquite en Vaso con cheetos', price: 7, img: 'images/esquite-en-vaso-con-cheetos.png' },
+  { id: 'classic-lemonade', name: 'Classic Lemonade', price: 6, img: 'images/classic-lemonade.png' },
+  { id: 'speciality', name: 'Speciality', price: 8, img: 'images/speciality.png' },
+  { id: 'flavor-add', name: 'Flavor Add', price: 1, img: 'images/flavor-add.png' }
+];
 
-  <div class="wrap">
-    <div class="header">
-      <h1>Antojitos Tracker</h1>
+const state = {
+  counts: {},
+  cash: 0,
+  digital: 0,
+  history: [],
+  weekly: {},
+  pendingItemId: null
+};
 
-      <div class="top-grid">
-        <div class="stat"><div class="label">Total Items</div><div class="value" id="totalItems">0</div></div>
-        <div class="stat"><div class="label">Total Sales</div><div class="value" id="totalSales">$0</div></div>
-        <div class="stat"><div class="label">Cash</div><div class="value" id="cashTotal">$0</div></div>
-        <div class="stat"><div class="label">Digital</div><div class="value" id="digitalTotal">$0</div></div>
+const els = {
+  cards: document.getElementById('cards'),
+  totalItems: document.getElementById('totalItems'),
+  totalSales: document.getElementById('totalSales'),
+  cashTotal: document.getElementById('cashTotal'),
+  digitalTotal: document.getElementById('digitalTotal'),
+  weekSales: document.getElementById('weekSales'),
+  weekItems: document.getElementById('weekItems'),
+  weekTopSeller: document.getElementById('weekTopSeller'),
+  weekTopQty: document.getElementById('weekTopQty'),
+  weeklyBreakdown: document.getElementById('weeklyBreakdown'),
+  undoBtn: document.getElementById('undoBtn'),
+  resetBtn: document.getElementById('resetBtn'),
+  saveWeekBtn: document.getElementById('saveWeekBtn'),
+  cashBtn: document.getElementById('cashBtn'),
+  digitalBtn: document.getElementById('digitalBtn'),
+  pendingItem: document.getElementById('pendingItem'),
+  tapSound: document.getElementById('tapSound')
+};
+
+function money(n) {
+  return `$${n.toFixed(2).replace('.00', '')}`;
+}
+
+function currentWeekKey() {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+function load() {
+  const saved = JSON.parse(localStorage.getItem('antojitosOrderTrackerV3') || 'null');
+  if (saved) {
+    state.counts = saved.counts || {};
+    state.cash = saved.cash || 0;
+    state.digital = saved.digital || 0;
+    state.history = saved.history || [];
+    state.weekly = saved.weekly || {};
+    state.pendingItemId = saved.pendingItemId || null;
+  }
+
+  ITEMS.forEach(item => {
+    if (typeof state.counts[item.id] !== 'number') state.counts[item.id] = 0;
+  });
+}
+
+function save(playConfetti = false) {
+  localStorage.setItem('antojitosOrderTrackerV3', JSON.stringify(state));
+  if (playConfetti) fireConfetti();
+}
+
+function playTap() {
+  try {
+    els.tapSound.currentTime = 0;
+    els.tapSound.play();
+  } catch (e) {}
+}
+
+function floating(el, text) {
+  const f = document.createElement('div');
+  f.className = 'floating';
+  f.textContent = text;
+  el.appendChild(f);
+  setTimeout(() => f.remove(), 800);
+}
+
+function updatePendingUI() {
+  if (!state.pendingItemId) {
+    els.pendingItem.textContent = 'None selected';
+    return;
+  }
+  const item = ITEMS.find(i => i.id === state.pendingItemId);
+  els.pendingItem.textContent = item ? `${item.name} - ${money(item.price)}` : 'None selected';
+}
+
+function selectItem(itemId) {
+  state.pendingItemId = itemId;
+  updatePendingUI();
+  save();
+
+  document.querySelectorAll('.card').forEach(card => card.classList.remove('selected-card'));
+  const card = document.querySelector(`[data-id="${itemId}"]`);
+  if (card) card.classList.add('selected-card');
+}
+
+function submitPendingSale(payType) {
+  if (!state.pendingItemId) {
+    alert('Tap an item first.');
+    return;
+  }
+
+  const item = ITEMS.find(i => i.id === state.pendingItemId);
+  if (!item) return;
+
+  state.counts[item.id] += 1;
+  if (payType === 'cash') state.cash += item.price;
+  else state.digital += item.price;
+
+  const weekKey = currentWeekKey();
+  if (!state.weekly[weekKey]) {
+    state.weekly[weekKey] = { counts: {}, cash: 0, digital: 0 };
+  }
+  if (typeof state.weekly[weekKey].counts[item.id] !== 'number') state.weekly[weekKey].counts[item.id] = 0;
+  state.weekly[weekKey].counts[item.id] += 1;
+  if (payType === 'cash') state.weekly[weekKey].cash += item.price;
+  else state.weekly[weekKey].digital += item.price;
+
+  state.history.push({
+    type: 'sale',
+    itemId: item.id,
+    price: item.price,
+    payType,
+    weekKey,
+    time: Date.now()
+  });
+
+  const card = document.querySelector(`[data-id="${item.id}"]`);
+  if (card) {
+    floating(card.querySelector('.img-wrap'), `+${money(item.price)}`);
+    card.classList.remove('selected-card');
+  }
+
+  state.pendingItemId = null;
+  playTap();
+  updateUI();
+  save();
+}
+
+function undoLast() {
+  const last = state.history.pop();
+  if (!last) return;
+
+  if (last.type === 'sale') {
+    state.counts[last.itemId] = Math.max(0, (state.counts[last.itemId] || 0) - 1);
+    if (last.payType === 'cash') state.cash = Math.max(0, state.cash - last.price);
+    else state.digital = Math.max(0, state.digital - last.price);
+
+    const week = state.weekly[last.weekKey];
+    if (week) {
+      week.counts[last.itemId] = Math.max(0, (week.counts[last.itemId] || 0) - 1);
+      if (last.payType === 'cash') week.cash = Math.max(0, week.cash - last.price);
+      else week.digital = Math.max(0, week.digital - last.price);
+    }
+  }
+
+  updateUI();
+  save();
+}
+
+function resetDay() {
+  if (!confirm("Reset today's daily totals? Weekly tracking will stay.")) return;
+
+  ITEMS.forEach(item => state.counts[item.id] = 0);
+  state.cash = 0;
+  state.digital = 0;
+  state.history = [];
+  state.pendingItemId = null;
+  document.querySelectorAll('.card').forEach(card => card.classList.remove('selected-card'));
+  updateUI();
+  save();
+}
+
+function saveWeekSnapshot() {
+  save(true);
+}
+
+function buildCards() {
+  els.cards.innerHTML = ITEMS.map(item => `
+    <div class="card" data-id="${item.id}">
+      <div class="img-wrap">
+        <img src="${item.img}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/600x600?text=Add+PNG'">
+        <div class="price-tag">$${item.price}</div>
       </div>
-
-      <div class="controls">
-        <button class="btn-white" id="undoBtn">↩ Undo</button>
-        <button class="btn-yellow" id="splitHalfBtn">Split 50 / 50</button>
-        <button class="btn-blue" id="splitCustomBtn">Split Custom</button>
-        <button class="btn-red" id="resetBtn">Reset Day</button>
+      <div class="count-box" id="count-${item.id}">0 sold</div>
+      <div class="tap-zone">
+        <button class="tap-btn ${item.id === 'flavor-add' ? 'flavor-btn' : ''}" onclick="selectItem('${item.id}')">Tap To Select</button>
       </div>
-
-      <div class="payment-boxes">
-        <button class="btn-green" id="cashBtn">Next Tap = Cash</button>
-        <button class="btn-blue" id="digitalBtn">Next Tap = Digital</button>
-        <select id="paymentMode">
-          <option value="cash">Default Mode: Cash</option>
-          <option value="digital">Default Mode: Digital</option>
-        </select>
-      </div>
-
-      <div class="week-box">
-        <input type="week" id="weekPicker" />
-        <button class="btn-pink" id="saveWeekBtn">Save Week</button>
-      </div>
-
-      <div class="small-note">The item name is tracked internally. On the cards, only the photo, price, and count show.</div>
     </div>
+  `).join('');
+}
 
-    <div class="cards" id="cards"></div>
+function updateWeeklyUI() {
+  const weekKey = currentWeekKey();
+  const week = state.weekly[weekKey];
 
-    <div class="section">
-      <h2>Weekly Totals</h2>
-      <div class="top-grid">
-        <div class="stat"><div class="label">Week Sales</div><div class="value" id="weekSales">$0</div></div>
-        <div class="stat"><div class="label">Week Items</div><div class="value" id="weekItems">0</div></div>
-        <div class="stat"><div class="label">Top Seller</div><div class="value" id="weekTopSeller">—</div></div>
-        <div class="stat"><div class="label">Top Seller Qty</div><div class="value" id="weekTopQty">0</div></div>
-      </div>
-      <div class="weekly-list" id="weeklyBreakdown"></div>
+  if (!week) {
+    els.weekSales.textContent = '$0';
+    els.weekItems.textContent = '0';
+    els.weekTopSeller.textContent = '—';
+    els.weekTopQty.textContent = '0';
+    els.weeklyBreakdown.innerHTML = '<div>No weekly sales yet.</div>';
+    return;
+  }
+
+  const counts = week.counts || {};
+  const weekSales = (week.cash || 0) + (week.digital || 0);
+  let weekItems = 0;
+  let topName = '—';
+  let topQty = 0;
+
+  const rows = ITEMS.map(item => {
+    const qty = counts[item.id] || 0;
+    weekItems += qty;
+    if (qty > topQty) {
+      topQty = qty;
+      topName = item.name;
+    }
+    return { name: item.name, qty, sales: qty * item.price };
+  }).sort((a, b) => b.qty - a.qty);
+
+  els.weekSales.textContent = money(weekSales);
+  els.weekItems.textContent = weekItems;
+  els.weekTopSeller.textContent = topName;
+  els.weekTopQty.textContent = topQty;
+
+  els.weeklyBreakdown.innerHTML = rows.map(r => `
+    <div class="weekly-row">
+      <div>${r.name}</div>
+      <div>${r.qty} sold</div>
+      <div>${money(r.sales)}</div>
     </div>
-  </div>
+  `).join('');
+}
 
-  <audio id="tapSound" class="hidden-audio" preload="auto">
-    <source src="sounds/tap.mp3" type="audio/mpeg" />
+function updateUI() {
+  let totalItems = 0;
+  ITEMS.forEach(item => {
+    const count = state.counts[item.id] || 0;
+    totalItems += count;
+    const countEl = document.getElementById(`count-${item.id}`);
+    if (countEl) countEl.textContent = `${count} sold`;
+  });
+
+  els.totalItems.textContent = totalItems;
+  els.totalSales.textContent = money(state.cash + state.digital);
+  els.cashTotal.textContent = money(state.cash);
+  els.digitalTotal.textContent = money(state.digital);
+  updatePendingUI();
+  updateWeeklyUI();
+}
+
+function fireConfetti() {
+  const canvas = document.getElementById('confetti');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const pieces = Array.from({ length: 140 }, () => ({
+    x: Math.random() * canvas.width,
+    y: -20 - Math.random() * canvas.height * 0.3,
+    w: 6 + Math.random() * 8,
+    h: 8 + Math.random() * 10,
+    vy: 2 + Math.random() * 4,
+    vx: -2 + Math.random() * 4,
+    rot: Math.random() * Math.PI,
+    vr: -0.2 + Math.random() * 0.4,
+    color: ['#ef3ea8', '#a8ef36', '#111111', '#ffd84d', '#f3b3d5'][Math.floor(Math.random() * 5)]
+  }));
+
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+    frame++;
+    if (frame < 160) requestAnimationFrame(draw);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  draw();
+}
+
+els.cashBtn.addEventListener('click', () => submitPendingSale('cash'));
+els.digitalBtn.addEventListener('click', () => submitPendingSale('digital'));
+els.undoBtn.addEventListener('click', undoLast);
+els.resetBtn.addEventListener('click', resetDay);
+els.saveWeekBtn.addEventListener('click', saveWeekSnapshot);
+
+load();
+buildCards();
+updateUI();
+
+window.selectItem = selectItem;source src="sounds/tap.mp3" type="audio/mpeg" />
   </audio>
 
   <script src="script.js"></script>
