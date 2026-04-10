@@ -3,88 +3,171 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antojitos Tracker</title>
+  <title>Antojitos POS</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <canvas id="confetti"></canvas>
+  <div class="app">
+    <header class="hero">
+      <h1>Antojitos POS</h1>
+      <p class="subtitle">Tap items, then choose payment</p>
+    </header>
 
-  <div class="wrap">
-    <div class="header">
-      <div class="logo-row">
-        <img src="images/logo.png" alt="Logo" class="top-logo" onerror="this.style.display='none'" />
+    <section class="grid">
+      <button class="tile tile-logo" onclick="addItem('chipLocos', this)">
+        <h2>Chip Locos</h2>
+        <p>$8</p>
+        <div class="count" id="chipLocosSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-chip-locos" onclick="addItem('chipLocos', this)">
+        <h2>Chip Locos</h2>
+        <p>$8</p>
+        <div class="count" id="chipLocosSoldAlt" style="display:none;">0</div>
+      </button>
+
+      <button class="tile tile-chip-esquite" onclick="addItem('chipEsquite', this)">
+        <h2>Chip Esquite</h2>
+        <p>$9</p>
+        <div class="count" id="chipEsquiteSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-maruchan" onclick="addItem('maruchan', this)">
+        <h2>Maruchan Preparada</h2>
+        <p>$12</p>
+        <div class="count" id="maruchanSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-churritos" onclick="addItem('churritos', this)">
+        <h2>Churritos Locos</h2>
+        <p>$8</p>
+        <div class="count" id="churritosSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-esquite-vaso" onclick="addItem('esquiteVaso', this)">
+        <h2>Esquite en Vaso</h2>
+        <p>$6</p>
+        <div class="count" id="esquiteVasoSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-esquite-cheetos" onclick="addItem('esquiteCheetos', this)">
+        <h2>Esquite con Cheetos</h2>
+        <p>$7</p>
+        <div class="count" id="esquiteCheetosSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-classic-lemonade" onclick="addItem('classicLemonade', this)">
+        <h2>Classic Lemonade</h2>
+        <p>$6</p>
+        <div class="count" id="classicLemonadeSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-speciality" onclick="addItem('speciality', this)">
+        <h2>Speciality</h2>
+        <p>$8</p>
+        <div class="count" id="specialitySold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+
+      <button class="tile tile-flavor-add" onclick="addItem('flavorAdd', this)">
+        <h2>Flavor Add</h2>
+        <p>$1</p>
+        <div class="count" id="flavorAddSold">0</div>
+        <div class="sold-label">Today Sold</div>
+      </button>
+    </section>
+
+    <section class="card current-order-card">
+      <div class="card-header-row">
+        <h2>Current Order</h2>
+        <button class="small-btn dark-btn" onclick="undoLastTap()">Undo Last Tap</button>
       </div>
 
-      <h1>Chip Esquite Orders</h1>
-      <p class="subtext">Tap an item box, then tap cash or digital to save the order.</p>
+      <div id="orderList" class="order-list"></div>
 
-      <div class="top-grid">
-        <div class="stat">
-          <div class="label">Daily Items</div>
-          <div class="value" id="totalItems">0</div>
+      <div class="order-totals">
+        <div class="order-total-line">
+          <span>Items in Order</span>
+          <strong id="orderItems">0</strong>
         </div>
-        <div class="stat">
-          <div class="label">Daily Sales</div>
-          <div class="value" id="totalSales">$0</div>
-        </div>
-        <div class="stat">
-          <div class="label">Cash</div>
-          <div class="value" id="cashTotal">$0</div>
-        </div>
-        <div class="stat">
-          <div class="label">Digital</div>
-          <div class="value" id="digitalTotal">$0</div>
+        <div class="order-total-line big-line">
+          <span>Subtotal</span>
+          <strong id="orderSubtotal">$0.00</strong>
         </div>
       </div>
 
-      <div class="controls">
-        <button class="btn-white" id="undoBtn">↩ Undo</button>
-        <button class="btn-red" id="resetBtn">Reset Day</button>
-        <button class="btn-pink" id="saveWeekBtn">Save Weekly</button>
+      <div class="checkout-row">
+        <button class="pay-btn cash-btn" onclick="checkoutOrder('cash')">Pay Cash</button>
+        <button class="pay-btn digital-btn" onclick="checkoutOrder('digital')">Pay Digital</button>
       </div>
 
-      <div class="pending-box">
-        <div class="pending-label">Selected Item</div>
-        <div class="pending-value" id="pendingItem">None selected</div>
+      <div class="checkout-row">
+        <button class="pay-btn split-btn" onclick="splitPaymentHalf()">Split 50/50</button>
+        <button class="pay-btn split-custom-btn" onclick="splitPaymentCustom()">Split Custom</button>
       </div>
 
-      <div class="payment-boxes">
-        <button class="btn-green big-pay" id="cashBtn">Cash</button>
-        <button class="btn-blue big-pay" id="digitalBtn">Digital</button>
+      <div class="checkout-row">
+        <button class="pay-btn cancel-btn" onclick="clearCurrentOrder()">Clear Order</button>
       </div>
-    </div>
+    </section>
 
-    <div class="cards" id="cards"></div>
-
-    <div class="section">
-      <h2>Weekly Tracking</h2>
-
-      <div class="top-grid">
-        <div class="stat">
-          <div class="label">Week Sales</div>
-          <div class="value" id="weekSales">$0</div>
-        </div>
-        <div class="stat">
-          <div class="label">Week Items</div>
-          <div class="value" id="weekItems">0</div>
-        </div>
-        <div class="stat">
-          <div class="label">Top Seller</div>
-          <div class="value" id="weekTopSeller">—</div>
-        </div>
-        <div class="stat">
-          <div class="label">Top Qty</div>
-          <div class="value" id="weekTopQty">0</div>
-        </div>
+    <section class="summary-grid">
+      <div class="card summary-card">
+        <h2>Today Sales</h2>
+        <div class="big-number" id="todaySales">$0.00</div>
       </div>
 
-      <div class="weekly-list" id="weeklyBreakdown"></div>
-    </div>
+      <div class="card summary-card">
+        <h2>Cash</h2>
+        <div class="big-number" id="cashTotal">$0.00</div>
+      </div>
+
+      <div class="card summary-card">
+        <h2>Digital</h2>
+        <div class="big-number" id="digitalTotal">$0.00</div>
+      </div>
+
+      <div class="card summary-card">
+        <h2>Today Items</h2>
+        <div class="big-number" id="todayItems">0</div>
+      </div>
+    </section>
+
+    <section class="summary-grid">
+      <div class="card summary-card">
+        <h2>This Week</h2>
+        <div class="big-number" id="weeklySales">$0.00</div>
+      </div>
+
+      <div class="card summary-card">
+        <h2>Weekly Top Seller</h2>
+        <div class="top-seller" id="weeklyTopSeller">None yet</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Today's Date</h2>
+      <p id="todayDate"></p>
+      <div class="save-row">
+        <button class="save-btn" onclick="saveDay()">Save Day</button>
+        <button class="reset-btn" onclick="resetDay()">Reset Day</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Previous Days</h2>
+      <div id="historyList" class="history-list"></div>
+    </section>
   </div>
 
-  <audio id="tapSound" class="hidden-audio" preload="auto">
-    <source src="sounds/tap.mp3" type="audio/mpeg" />
-  </audio>
+  <div id="confettiContainer" class="confetti-container"></div>
 
   <script src="script.js"></script>
 </body>
