@@ -1,193 +1,406 @@
-const tapSound = new Audio("sounds/tap.mp3");
-tapSound.preload = "auto";
-
-function playTapSound() {
-  tapSound.currentTime = 0;
-  tapSound.play().catch(() => {});
-}
-
-let data = {
-  corn: { count: Number(localStorage.getItem("cornCount")) || 0, price: 6 },
-  corncheetos: { count: Number(localStorage.getItem("corncheetosCount")) || 0, price: 7 },
-  chiplocos: { count: Number(localStorage.getItem("chiplocosCount")) || 0, price: 8 },
-  chipesquite: { count: Number(localStorage.getItem("chipesquiteCount")) || 0, price: 9 },
-  maruchan: { count: Number(localStorage.getItem("maruchanCount")) || 0, price: 12 },
-  churritos: { count: Number(localStorage.getItem("churritosCount")) || 0, price: 8 },
-  lemonadeclassic: { count: Number(localStorage.getItem("lemonadeclassicCount")) || 0, price: 6 },
-  lemonadeflavor: { count: Number(localStorage.getItem("lemonadeflavorCount")) || 0, price: 7 },
-  lemonadespecial: { count: Number(localStorage.getItem("lemonadespecialCount")) || 0, price: 8 }
-};
-
-let history = JSON.parse(localStorage.getItem("antojitosSalesHistory")) || [];
-
-const ids = [
-  "corn",
-  "corncheetos",
-  "chiplocos",
-  "chipesquite",
-  "maruchan",
-  "churritos",
-  "lemonadeclassic",
-  "lemonadeflavor",
-  "lemonadespecial"
+const ITEMS = [
+  { id: 'chip-locos', name: 'Chip locos', price: 8, img: 'images/chip-locos.png' },
+  { id: 'chip-esquite', name: 'Chip Esquite', price: 9, img: 'images/chip-esquite.png' },
+  { id: 'maruchan-preparada', name: 'Maruchan Preparada', price: 12, img: 'images/maruchan-preparada.png' },
+  { id: 'churritos-locos', name: 'Churritos Locos', price: 8, img: 'images/churritos-locos.png' },
+  { id: 'esquite-vaso', name: 'Esquite en Vaso', price: 6, img: 'images/esquite-en-vaso.png' },
+  { id: 'esquite-cheetos', name: 'Esquite en Vaso con cheetos', price: 7, img: 'images/esquite-en-vaso-con-cheetos.png' },
+  { id: 'classic-lemonade', name: 'Classic Lemonade', price: 6, img: 'images/classic-lemonade.png' },
+  { id: 'speciality', name: 'Speciality', price: 8, img: 'images/speciality.png' }
 ];
 
-function formatMoney(amount) {
-  return `$${amount.toFixed(2)}`;
+const state = {
+  counts: {},
+  cash: 0,
+  digital: 0,
+  history: [],
+  nextPaymentOverride: null,
+  weekly: {}
+};
+
+const els = {
+  cards: document.getElementById('cards'),
+  totalItems: document.getElementById('totalItems'),
+  totalSales: document.getElementById('totalSales'),
+  cashTotal: document.getElementById('cashTotal'),
+  digitalTotal: document.getElementById('digitalTotal'),
+  weekSales: document.getElementById('weekSales'),
+  weekItems: document.getElementById('weekItems'),
+  weekTopSeller: document.getElementById('weekTopSeller'),
+  weekTopQty: document.getElementById('weekTopQty'),
+  weeklyBreakdown: document.getElementById('weeklyBreakdown'),
+  paymentMode: document.getElementById('paymentMode'),
+  undoBtn: document.getElementById('undoBtn'),
+  splitHalfBtn: document.getElementById('splitHalfBtn'),
+  splitCustomBtn: document.getElementById('splitCustomBtn'),
+  cashBtn: document.getElementById('cashBtn'),
+  digitalBtn: document.getElementById('digitalBtn'),
+  resetBtn: document.getElementById('resetBtn'),
+  saveWeekBtn: document.getElementById('saveWeekBtn'),
+  weekPicker: document.getElementById('weekPicker'),
+  tapSound: document.getElementById('tapSound')
+};
+
+function money(n) {
+  return `$${n.toFixed(2).replace('.00', '')}`;
 }
 
-function getTodayLabel() {
-  return new Date().toLocaleDateString();
+function currentWeekString() {
+  const d = new Date();
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 }
 
-function saveCurrentData() {
-  ids.forEach((id) => {
-    localStorage.setItem(`${id}Count`, data[id].count);
+function getSelectedWeek() {
+  return els.weekPicker.value || currentWeekString();
+}
+
+function load() {
+  const saved = JSON.parse(localStorage.getItem('antojitosTrackerV2') || 'null');
+  if (saved) {
+    state.counts = saved.counts || {};
+    state.cash = saved.cash || 0;
+    state.digital = saved.digital || 0;
+    state.history = saved.history || [];
+    state.nextPaymentOverride = saved.nextPaymentOverride || null;
+    state.weekly = saved.weekly || {};
+  }
+
+  ITEMS.forEach(item => {
+    if (typeof state.counts[item.id] !== 'number') state.counts[item.id] = 0;
   });
-  localStorage.setItem("antojitosSalesHistory", JSON.stringify(history));
+
+  els.weekPicker.value = currentWeekString();
 }
 
-function getGrandTotal() {
-  return ids.reduce((sum, id) => sum + data[id].count * data[id].price, 0);
+function save(playConfetti = false) {
+  localStorage.setItem('antojitosTrackerV2', JSON.stringify(state));
+  if (playConfetti) fireConfetti();
 }
 
-function getTotalItems() {
-  return ids.reduce((sum, id) => sum + data[id].count, 0);
+function paymentType() {
+  if (state.nextPaymentOverride) {
+    const mode = state.nextPaymentOverride;
+    state.nextPaymentOverride = null;
+    return mode;
+  }
+  return els.paymentMode.value;
 }
 
-function updateScreen() {
-  ids.forEach((id) => {
-    document.getElementById(`${id}Count`).textContent = data[id].count;
+function playTap() {
+  try {
+    els.tapSound.currentTime = 0;
+    els.tapSound.play();
+  } catch (e) {}
+}
+
+function floating(el, text) {
+  const f = document.createElement('div');
+  f.className = 'floating';
+  f.textContent = text;
+  el.appendChild(f);
+  setTimeout(() => f.remove(), 800);
+}
+
+function addPaymentAmount(amount, payType) {
+  if (payType === 'cash') state.cash += amount;
+  else state.digital += amount;
+}
+
+function subtractPaymentAmount(amount, payType) {
+  if (payType === 'cash') state.cash = Math.max(0, state.cash - amount);
+  else state.digital = Math.max(0, state.digital - amount);
+}
+
+function addSale(itemId, amount, source = 'tap') {
+  const item = ITEMS.find(i => i.id === itemId);
+  if (!item) return;
+
+  state.counts[itemId] += 1;
+  const payType = paymentType();
+  addPaymentAmount(amount, payType);
+
+  state.history.push({
+    type: 'sale',
+    itemId,
+    amount,
+    payType,
+    source,
+    time: Date.now()
   });
 
-  document.getElementById("grandTotal").textContent = formatMoney(getGrandTotal());
-  document.getElementById("totalItems").textContent = getTotalItems();
-  document.getElementById("todayDate").textContent = getTodayLabel();
+  updateUI();
+  save();
+
+  const card = document.querySelector(`[data-id="${itemId}"]`);
+  if (card) floating(card.querySelector('.img-wrap'), `+${money(amount)}`);
+  playTap();
 }
 
-function renderHistory() {
-  const historyListEl = document.getElementById("historyList");
+function subtractSale(itemId) {
+  if ((state.counts[itemId] || 0) <= 0) return;
+  state.counts[itemId] -= 1;
+  state.history.push({ type: 'manual-minus', itemId, time: Date.now() });
+  updateUI();
+  save();
+}
 
-  if (history.length === 0) {
-    historyListEl.innerHTML = "<p>No saved days yet.</p>";
+function undoLast() {
+  const last = state.history.pop();
+  if (!last) return;
+
+  if (last.type === 'sale') {
+    state.counts[last.itemId] = Math.max(0, (state.counts[last.itemId] || 0) - 1);
+    subtractPaymentAmount(last.amount, last.payType);
+  } else if (last.type === 'split') {
+    state.cash = Math.max(0, state.cash - last.cashAmount);
+    state.digital = Math.max(0, state.digital - last.digitalAmount);
+  } else if (last.type === 'manual-minus') {
+    state.counts[last.itemId] += 1;
+  } else if (last.type === 'weekly-save') {
+    if (last.previousWeekData === null) {
+      delete state.weekly[last.weekKey];
+    } else {
+      state.weekly[last.weekKey] = last.previousWeekData;
+    }
+  }
+
+  updateUI();
+  save();
+}
+
+function addSplitHalf() {
+  const amount = Number(prompt('Total amount to split 50/50?', '8'));
+  if (!amount || amount <= 0) return;
+  const half = amount / 2;
+  state.cash += half;
+  state.digital += half;
+  state.history.push({ type: 'split', cashAmount: half, digitalAmount: half, time: Date.now() });
+  updateUI();
+  save();
+}
+
+function addSplitCustom() {
+  const total = Number(prompt('Total sale amount?', '8'));
+  if (!total || total <= 0) return;
+
+  const cashPart = Number(prompt(`How much cash out of ${total}?`, '4'));
+  if (isNaN(cashPart) || cashPart < 0 || cashPart > total) {
+    alert('Cash amount is not valid.');
     return;
   }
 
-  historyListEl.innerHTML = "";
-
-  const newestFirst = [...history].reverse();
-
-  newestFirst.forEach((day) => {
-    const entry = document.createElement("div");
-    entry.className = "history-entry";
-
-    entry.innerHTML = `
-      <h3>${day.date}</h3>
-      <p>Corn in Cup: ${day.cornCount} (${formatMoney(day.cornSales)})</p>
-      <p>Corn + Cheetos: ${day.corncheetosCount} (${formatMoney(day.corncheetosSales)})</p>
-      <p>Chip Locos: ${day.chiplocosCount} (${formatMoney(day.chiplocosSales)})</p>
-      <p>Chip Esquite: ${day.chipesquiteCount} (${formatMoney(day.chipesquiteSales)})</p>
-      <p>Maruchan Preparada: ${day.maruchanCount} (${formatMoney(day.maruchanSales)})</p>
-      <p>Churritos Locos: ${day.churritosCount} (${formatMoney(day.churritosSales)})</p>
-      <p>Lemonade Classic: ${day.lemonadeclassicCount} (${formatMoney(day.lemonadeclassicSales)})</p>
-      <p>Lemonade Flavor: ${day.lemonadeflavorCount} (${formatMoney(day.lemonadeflavorSales)})</p>
-      <p>Lemonade Specialty: ${day.lemonadespecialCount} (${formatMoney(day.lemonadespecialSales)})</p>
-      <p><strong>Total Items:</strong> ${day.totalItems}</p>
-      <p><strong>Total Sales:</strong> ${formatMoney(day.grandTotal)}</p>
-    `;
-
-    historyListEl.appendChild(entry);
-  });
+  const digitalPart = total - cashPart;
+  state.cash += cashPart;
+  state.digital += digitalPart;
+  state.history.push({ type: 'split', cashAmount: cashPart, digitalAmount: digitalPart, time: Date.now() });
+  updateUI();
+  save();
 }
 
-function changeCount(item, amount) {
-  data[item].count += amount;
+function addFlavorToDrink(itemId) {
+  const drinkIds = ['classic-lemonade', 'speciality'];
+  if (!drinkIds.includes(itemId)) return;
+  addSale(itemId, 1, 'flavor-add');
+}
 
-  if (data[item].count < 0) {
-    data[item].count = 0;
-  }
+function saveWeek() {
+  const weekKey = getSelectedWeek();
+  const previousWeekData = structuredClone(state.weekly[weekKey] || null);
 
-  playTapSound();
-  saveCurrentData();
-  updateScreen();
+  state.weekly[weekKey] = {
+    counts: structuredClone(state.counts),
+    cash: state.cash,
+    digital: state.digital,
+    savedAt: Date.now()
+  };
+
+  state.history.push({
+    type: 'weekly-save',
+    weekKey,
+    previousWeekData,
+    time: Date.now()
+  });
+
+  updateWeeklyUI();
+  save(true);
 }
 
 function resetDay() {
-  const confirmReset = confirm("Are you sure you want to reset today's counts without saving?");
-  if (!confirmReset) return;
+  if (!confirm("Reset today's counts and money? Weekly saves stay stored.")) return;
 
-  ids.forEach((id) => {
-    data[id].count = 0;
+  ITEMS.forEach(item => {
+    state.counts[item.id] = 0;
   });
 
-  saveCurrentData();
-  updateScreen();
+  state.cash = 0;
+  state.digital = 0;
+  state.history = [];
+  updateUI();
+  save();
 }
 
-function saveDay() {
-  const totalItems = getTotalItems();
+function buildCards() {
+  els.cards.innerHTML = ITEMS.map(item => {
+    const isDrink = item.id === 'classic-lemonade' || item.id === 'speciality';
 
-  if (totalItems === 0) {
-    alert("You have nothing to save yet for today.");
+    return `
+      <div class="card" data-id="${item.id}">
+        <div class="img-wrap">
+          <img src="${item.img}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/600x600?text=Add+PNG'">
+          <div class="price-tag">$${item.price}</div>
+        </div>
+
+        <div class="count-bar">
+          <div class="count-box" id="count-${item.id}">0 sold</div>
+          <div class="mini-btns">
+            <button class="btn-red" onclick="subtractSale('${item.id}')">−</button>
+            <button class="btn-green" onclick="addSale('${item.id}', ${item.price})">+</button>
+          </div>
+        </div>
+
+        <div class="tap-zone">
+          <button class="tap-btn" onclick="addSale('${item.id}', ${item.price})">Tap to Add Sale</button>
+        </div>
+
+        ${isDrink ? `
+          <div class="tap-zone" style="padding-top:0;">
+            <button class="btn-yellow" style="width:100%;" onclick="addFlavorToDrink('${item.id}')">Add Flavor +$1</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function updateUI() {
+  let totalItems = 0;
+
+  ITEMS.forEach(item => {
+    const count = state.counts[item.id] || 0;
+    totalItems += count;
+    const countEl = document.getElementById(`count-${item.id}`);
+    if (countEl) countEl.textContent = `${count} sold`;
+  });
+
+  const totalSales = state.cash + state.digital;
+  els.totalItems.textContent = totalItems;
+  els.totalSales.textContent = money(totalSales);
+  els.cashTotal.textContent = money(state.cash);
+  els.digitalTotal.textContent = money(state.digital);
+
+  updateWeeklyUI();
+}
+
+function updateWeeklyUI() {
+  const weekKey = getSelectedWeek();
+  const week = state.weekly[weekKey];
+
+  if (!week) {
+    els.weekSales.textContent = '$0';
+    els.weekItems.textContent = '0';
+    els.weekTopSeller.textContent = '—';
+    els.weekTopQty.textContent = '0';
+    els.weeklyBreakdown.innerHTML = '<div class="small-note">No saved week yet. Tap Save Week when you want to lock this week in.</div>';
     return;
   }
 
-  const today = getTodayLabel();
+  const counts = week.counts || {};
+  const weekSales = (week.cash || 0) + (week.digital || 0);
+  let weekItems = 0;
+  let topName = '—';
+  let topQty = 0;
 
-  const alreadySaved = history.find((entry) => entry.date === today);
-  if (alreadySaved) {
-    const overwrite = confirm("Today's numbers were already saved. Do you want to replace them?");
-    if (!overwrite) return;
+  const rows = ITEMS.map(item => {
+    const qty = counts[item.id] || 0;
+    weekItems += qty;
+    if (qty > topQty) {
+      topQty = qty;
+      topName = item.name;
+    }
+    return {
+      name: item.name,
+      qty,
+      sales: qty * item.price
+    };
+  }).sort((a, b) => b.qty - a.qty);
 
-    history = history.filter((entry) => entry.date !== today);
-  }
+  els.weekSales.textContent = money(weekSales);
+  els.weekItems.textContent = weekItems;
+  els.weekTopSeller.textContent = topName;
+  els.weekTopQty.textContent = topQty;
 
-  const daySummary = {
-    date: today,
-
-    cornCount: data.corn.count,
-    cornSales: data.corn.count * data.corn.price,
-
-    corncheetosCount: data.corncheetos.count,
-    corncheetosSales: data.corncheetos.count * data.corncheetos.price,
-
-    chiplocosCount: data.chiplocos.count,
-    chiplocosSales: data.chiplocos.count * data.chiplocos.price,
-
-    chipesquiteCount: data.chipesquite.count,
-    chipesquiteSales: data.chipesquite.count * data.chipesquite.price,
-
-    maruchanCount: data.maruchan.count,
-    maruchanSales: data.maruchan.count * data.maruchan.price,
-
-    churritosCount: data.churritos.count,
-    churritosSales: data.churritos.count * data.churritos.price,
-
-    lemonadeclassicCount: data.lemonadeclassic.count,
-    lemonadeclassicSales: data.lemonadeclassic.count * data.lemonadeclassic.price,
-
-    lemonadeflavorCount: data.lemonadeflavor.count,
-    lemonadeflavorSales: data.lemonadeflavor.count * data.lemonadeflavor.price,
-
-    lemonadespecialCount: data.lemonadespecial.count,
-    lemonadespecialSales: data.lemonadespecial.count * data.lemonadespecial.price,
-
-    totalItems: totalItems,
-    grandTotal: getGrandTotal()
-  };
-
-  history.push(daySummary);
-
-  ids.forEach((id) => {
-    data[id].count = 0;
-  });
-
-  saveCurrentData();
-  updateScreen();
-  renderHistory();
-
-  alert("Day saved and reset for tomorrow.");
+  els.weeklyBreakdown.innerHTML = rows.map(r => `
+    <div class="weekly-row">
+      <div>${r.name}</div>
+      <div>${r.qty} sold</div>
+      <div>${money(r.sales)}</div>
+    </div>
+  `).join('');
 }
 
-updateScreen();
-renderHistory();
+function fireConfetti() {
+  const canvas = document.getElementById('confetti');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const pieces = Array.from({ length: 140 }, () => ({
+    x: Math.random() * canvas.width,
+    y: -20 - Math.random() * canvas.height * 0.3,
+    w: 6 + Math.random() * 8,
+    h: 8 + Math.random() * 10,
+    vy: 2 + Math.random() * 4,
+    vx: -2 + Math.random() * 4,
+    rot: Math.random() * Math.PI,
+    vr: -0.2 + Math.random() * 0.4,
+    color: ['#ff5fa2', '#ffd84d', '#4caf50', '#4a90e2', '#8a4f2a'][Math.floor(Math.random() * 5)]
+  }));
+
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+
+    frame++;
+    if (frame < 160) {
+      requestAnimationFrame(draw);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  draw();
+}
+
+els.undoBtn.addEventListener('click', undoLast);
+els.splitHalfBtn.addEventListener('click', addSplitHalf);
+els.splitCustomBtn.addEventListener('click', addSplitCustom);
+els.cashBtn.addEventListener('click', () => state.nextPaymentOverride = 'cash');
+els.digitalBtn.addEventListener('click', () => state.nextPaymentOverride = 'digital');
+els.resetBtn.addEventListener('click', resetDay);
+els.saveWeekBtn.addEventListener('click', saveWeek);
+els.weekPicker.addEventListener('change', updateWeeklyUI);
+
+load();
+buildCards();
+updateUI();
+
+window.addSale = addSale;
+window.subtractSale = subtractSale;
+window.addFlavorToDrink = addFlavorToDrink;
