@@ -1,105 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Antojitos Tracker</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antojitos Tracker</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
+  <canvas id="confetti"></canvas>
 
-<div class="app">
+  <div class="wrap">
+    <div class="header">
+      <h1>Antojitos Tracker</h1>
 
-<h1>Antojitos Tracker</h1>
-<p class="subtitle">Tap Counter</p>
+      <div class="top-grid">
+        <div class="stat"><div class="label">Total Items</div><div class="value" id="totalItems">0</div></div>
+        <div class="stat"><div class="label">Total Sales</div><div class="value" id="totalSales">$0</div></div>
+        <div class="stat"><div class="label">Cash</div><div class="value" id="cashTotal">$0</div></div>
+        <div class="stat"><div class="label">Digital</div><div class="value" id="digitalTotal">$0</div></div>
+      </div>
 
-<div class="grid">
+      <div class="controls">
+        <button class="btn-white" id="undoBtn">↩ Undo</button>
+        <button class="btn-yellow" id="splitHalfBtn">Split 50 / 50</button>
+        <button class="btn-blue" id="splitCustomBtn">Split Custom</button>
+        <button class="btn-red" id="resetBtn">Reset Day</button>
+      </div>
 
-<div class="tile corn" onclick="changeCount('corn',1)">
-<h2>Corn in Cup</h2>
-<p>$6</p>
-<div class="count" id="cornCount">0</div>
-</div>
+      <div class="payment-boxes">
+        <button class="btn-green" id="cashBtn">Next Tap = Cash</button>
+        <button class="btn-blue" id="digitalBtn">Next Tap = Digital</button>
+        <select id="paymentMode">
+          <option value="cash">Default Mode: Cash</option>
+          <option value="digital">Default Mode: Digital</option>
+        </select>
+      </div>
 
-<div class="tile corncheetos" onclick="changeCount('corncheetos',1)">
-<h2>Corn + Cheetos</h2>
-<p>$7</p>
-<div class="count" id="corncheetosCount">0</div>
-</div>
+      <div class="week-box">
+        <input type="week" id="weekPicker" />
+        <button class="btn-pink" id="saveWeekBtn">Save Week</button>
+      </div>
 
-<div class="tile chiplocos" onclick="changeCount('chiplocos',1)">
-<h2>Chip Locos</h2>
-<p>$8</p>
-<div class="count" id="chiplocosCount">0</div>
-</div>
+      <div class="small-note">The item name is tracked internally. On the cards, only the photo, price, and count show.</div>
+    </div>
 
-<div class="tile chipesquite" onclick="changeCount('chipesquite',1)">
-<h2>Chip Esquite</h2>
-<p>$9</p>
-<div class="count" id="chipesquiteCount">0</div>
-</div>
+    <div class="cards" id="cards"></div>
 
-<div class="tile maruchan" onclick="changeCount('maruchan',1)">
-<h2>Maruchan Preparada</h2>
-<p>$12</p>
-<div class="count" id="maruchanCount">0</div>
-</div>
+    <div class="section">
+      <h2>Weekly Totals</h2>
+      <div class="top-grid">
+        <div class="stat"><div class="label">Week Sales</div><div class="value" id="weekSales">$0</div></div>
+        <div class="stat"><div class="label">Week Items</div><div class="value" id="weekItems">0</div></div>
+        <div class="stat"><div class="label">Top Seller</div><div class="value" id="weekTopSeller">—</div></div>
+        <div class="stat"><div class="label">Top Seller Qty</div><div class="value" id="weekTopQty">0</div></div>
+      </div>
+      <div class="weekly-list" id="weeklyBreakdown"></div>
+    </div>
+  </div>
 
-<div class="tile churritos" onclick="changeCount('churritos',1)">
-<h2>Churritos Locos</h2>
-<p>$8</p>
-<div class="count" id="churritosCount">0</div>
-</div>
+  <audio id="tapSound" class="hidden-audio" preload="auto">
+    <source src="sounds/tap.mp3" type="audio/mpeg" />
+  </audio>
 
-<div class="tile lemonade" onclick="changeCount('lemonadeclassic',1)">
-<h2>Lemonade Classic</h2>
-<p>$6</p>
-<div class="count" id="lemonadeclassicCount">0</div>
-</div>
-
-<div class="tile lemonade" onclick="changeCount('lemonadeflavor',1)">
-<h2>Lemonade Flavor</h2>
-<p>$7</p>
-<div class="count" id="lemonadeflavorCount">0</div>
-</div>
-
-<div class="tile lemonade" onclick="changeCount('lemonadespecial',1)">
-<h2>Lemonade Specialty</h2>
-<p>$8</p>
-<div class="count" id="lemonadespecialCount">0</div>
-</div>
-
-</div>
-
-<div class="summary-card">
-<h2>Grand Total</h2>
-<div class="grand-total" id="grandTotal">$0</div>
-</div>
-
-<div class="summary-card">
-<h2>Total Items</h2>
-<div class="grand-total" id="totalItems">0</div>
-</div>
-
-<div class="summary-card">
-<h2>Today's Date</h2>
-<p id="todayDate"></p>
-</div>
-
-<div class="action-row">
-<button class="save-btn" onclick="saveDay()">Save Day</button>
-<button class="reset-btn" onclick="resetDay()">Reset Day</button>
-</div>
-
-<div class="summary-card">
-<h2>Previous Days</h2>
-<div id="historyList" class="history-list"></div>
-</div>
-
-</div>
-
-<script src="script.js"></script>
-
+  <script src="script.js"></script>
 </body>
 </html>
