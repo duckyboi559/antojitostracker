@@ -1,371 +1,481 @@
-const ITEMS = [
-  { id: "chip-locos", name: "Chip locos", price: 8, img: "images/chip-locos.png" },
-  { id: "chip-esquite", name: "Chip Esquite", price: 9, img: "images/chip-esquite.png" },
-  { id: "maruchan-preparada", name: "Maruchan Preparada", price: 12, img: "images/maruchan-preparada.png" },
-  { id: "churritos-locos", name: "Churritos Locos", price: 8, img: "images/churritos-locos.png" },
-  { id: "esquite-vaso", name: "Esquite en Vaso", price: 6, img: "images/esquite-en-vaso.png" },
-  { id: "esquite-cheetos", name: "Esquite en Vaso con cheetos", price: 7, img: "images/esquite-en-vaso-con-cheetos.png" },
-  { id: "classic-lemonade", name: "Classic Lemonade", price: 6, img: "images/classic-lemonade.png" },
-  { id: "speciality", name: "Speciality", price: 8, img: "images/speciality.png" },
-  { id: "flavor-add", name: "Flavor Add", price: 1, img: "images/flavor-add.png" }
-];
-
-const state = {
-  counts: {},
-  cash: 0,
-  digital: 0,
-  history: [],
-  weekly: {},
-  pendingItemId: null
+const ITEMS = {
+  chipLocos: { name: "Chip Locos", price: 8 },
+  chipEsquite: { name: "Chip Esquite", price: 9 },
+  maruchan: { name: "Maruchan Preparada", price: 12 },
+  churritos: { name: "Churritos Locos", price: 8 },
+  esquiteVaso: { name: "Esquite en Vaso", price: 6 },
+  esquiteCheetos: { name: "Esquite con Cheetos", price: 7 },
+  classicLemonade: { name: "Classic Lemonade", price: 6 },
+  speciality: { name: "Speciality", price: 8 },
+  flavorAdd: { name: "Flavor Add", price: 1 }
 };
 
-const els = {
-  cards: document.getElementById("cards"),
-  totalItems: document.getElementById("totalItems"),
-  totalSales: document.getElementById("totalSales"),
-  cashTotal: document.getElementById("cashTotal"),
-  digitalTotal: document.getElementById("digitalTotal"),
-  weekSales: document.getElementById("weekSales"),
-  weekItems: document.getElementById("weekItems"),
-  weekTopSeller: document.getElementById("weekTopSeller"),
-  weekTopQty: document.getElementById("weekTopQty"),
-  weeklyBreakdown: document.getElementById("weeklyBreakdown"),
-  undoBtn: document.getElementById("undoBtn"),
-  resetBtn: document.getElementById("resetBtn"),
-  saveWeekBtn: document.getElementById("saveWeekBtn"),
-  cashBtn: document.getElementById("cashBtn"),
-  digitalBtn: document.getElementById("digitalBtn"),
-  pendingItem: document.getElementById("pendingItem"),
-  tapSound: document.getElementById("tapSound")
-};
+const ITEM_IDS = Object.keys(ITEMS);
+const STORAGE_KEY = "antojitosPosStateV1";
+const tapSound = new Audio("sounds/tap.mp3");
+tapSound.preload = "auto";
 
-function money(n) {
-  return `$${n.toFixed(2).replace(".00", "")}`;
-}
+let state = loadState();
 
-function currentWeekKey() {
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
-}
-
-function load() {
-  const saved = JSON.parse(localStorage.getItem("antojitosOrderTrackerV3") || "null");
-
-  if (saved) {
-    state.counts = saved.counts || {};
-    state.cash = saved.cash || 0;
-    state.digital = saved.digital || 0;
-    state.history = saved.history || [];
-    state.weekly = saved.weekly || {};
-    state.pendingItemId = saved.pendingItemId || null;
-  }
-
-  ITEMS.forEach((item) => {
-    if (typeof state.counts[item.id] !== "number") {
-      state.counts[item.id] = 0;
-    }
+function createEmptyCounts() {
+  const counts = {};
+  ITEM_IDS.forEach((id) => {
+    counts[id] = 0;
   });
+  return counts;
 }
 
-function save(playConfetti = false) {
-  localStorage.setItem("antojitosOrderTrackerV3", JSON.stringify(state));
-  if (playConfetti) fireConfetti();
-}
+function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
 
-function playTap() {
-  try {
-    els.tapSound.currentTime = 0;
-    els.tapSound.play();
-  } catch (e) {}
-}
-
-function floating(el, text) {
-  const f = document.createElement("div");
-  f.className = "floating";
-  f.textContent = text;
-  el.appendChild(f);
-  setTimeout(() => f.remove(), 800);
-}
-
-function updatePendingUI() {
-  if (!state.pendingItemId) {
-    els.pendingItem.textContent = "None selected";
-    return;
-  }
-
-  const item = ITEMS.find((i) => i.id === state.pendingItemId);
-  els.pendingItem.textContent = item ? `${item.name} - ${money(item.price)}` : "None selected";
-}
-
-function clearSelectedCards() {
-  document.querySelectorAll(".card").forEach((card) => {
-    card.classList.remove("selected-card");
-  });
-}
-
-function selectItem(itemId) {
-  state.pendingItemId = itemId;
-  updatePendingUI();
-  clearSelectedCards();
-
-  const card = document.querySelector(`[data-id="${itemId}"]`);
-  if (card) card.classList.add("selected-card");
-
-  save();
-}
-
-function ensureWeekExists(weekKey) {
-  if (!state.weekly[weekKey]) {
-    state.weekly[weekKey] = {
-      counts: {},
-      cash: 0,
-      digital: 0
+  if (!raw) {
+    return {
+      todaySold: createEmptyCounts(),
+      currentOrder: createEmptyCounts(),
+      todayCash: 0,
+      todayDigital: 0,
+      history: [],
+      actionStack: []
     };
   }
 
-  ITEMS.forEach((item) => {
-    if (typeof state.weekly[weekKey].counts[item.id] !== "number") {
-      state.weekly[weekKey].counts[item.id] = 0;
-    }
-  });
+  const saved = JSON.parse(raw);
+
+  return {
+    todaySold: { ...createEmptyCounts(), ...(saved.todaySold || {}) },
+    currentOrder: { ...createEmptyCounts(), ...(saved.currentOrder || {}) },
+    todayCash: Number(saved.todayCash) || 0,
+    todayDigital: Number(saved.todayDigital) || 0,
+    history: Array.isArray(saved.history) ? saved.history : [],
+    actionStack: Array.isArray(saved.actionStack) ? saved.actionStack : []
+  };
 }
 
-function submitPendingSale(payType) {
-  if (!state.pendingItemId) {
-    alert("Tap an item first.");
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function formatMoney(amount) {
+  return `$${amount.toFixed(2)}`;
+}
+
+function getTodayKey() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayLabel() {
+  return new Date().toLocaleDateString();
+}
+
+function getOrderSubtotal() {
+  return ITEM_IDS.reduce((sum, id) => sum + state.currentOrder[id] * ITEMS[id].price, 0);
+}
+
+function getOrderItemCount() {
+  return ITEM_IDS.reduce((sum, id) => sum + state.currentOrder[id], 0);
+}
+
+function getTodaySales() {
+  return state.todayCash + state.todayDigital;
+}
+
+function getTodayItems() {
+  return ITEM_IDS.reduce((sum, id) => sum + state.todaySold[id], 0);
+}
+
+function playTapSound() {
+  tapSound.currentTime = 0;
+  tapSound.play().catch(() => {});
+}
+
+function vibrateTap() {
+  if ("vibrate" in navigator) {
+    navigator.vibrate(25);
+  }
+}
+
+function showFloatMoney(tileEl, amount) {
+  const bubble = document.createElement("div");
+  bubble.className = "float-money";
+  bubble.textContent = `+$${amount}`;
+  tileEl.appendChild(bubble);
+
+  setTimeout(() => {
+    bubble.remove();
+  }, 900);
+}
+
+function animateTile(tileEl) {
+  tileEl.classList.remove("pop");
+  void tileEl.offsetWidth;
+  tileEl.classList.add("pop");
+}
+
+function renderOrderList() {
+  const orderList = document.getElementById("orderList");
+  const subtotal = getOrderSubtotal();
+
+  if (subtotal === 0) {
+    orderList.innerHTML = `<div class="empty-order"><span>No items yet</span><span>Tap a box</span></div>`;
     return;
   }
 
-  const item = ITEMS.find((i) => i.id === state.pendingItemId);
-  if (!item) return;
+  const rows = ITEM_IDS
+    .filter((id) => state.currentOrder[id] > 0)
+    .map((id) => {
+      const qty = state.currentOrder[id];
+      const total = qty * ITEMS[id].price;
+      return `
+        <div class="order-item-row">
+          <span>${ITEMS[id].name} x${qty}</span>
+          <strong>${formatMoney(total)}</strong>
+        </div>
+      `;
+    })
+    .join("");
 
-  state.counts[item.id] += 1;
-
-  if (payType === "cash") {
-    state.cash += item.price;
-  } else {
-    state.digital += item.price;
-  }
-
-  const weekKey = currentWeekKey();
-  ensureWeekExists(weekKey);
-
-  state.weekly[weekKey].counts[item.id] += 1;
-
-  if (payType === "cash") {
-    state.weekly[weekKey].cash += item.price;
-  } else {
-    state.weekly[weekKey].digital += item.price;
-  }
-
-  state.history.push({
-    type: "sale",
-    itemId: item.id,
-    price: item.price,
-    payType,
-    weekKey,
-    time: Date.now()
-  });
-
-  const card = document.querySelector(`[data-id="${item.id}"]`);
-  if (card) {
-    floating(card.querySelector(".img-wrap"), `+${money(item.price)}`);
-  }
-
-  state.pendingItemId = null;
-  clearSelectedCards();
-  playTap();
-  updateUI();
-  save();
+  orderList.innerHTML = rows;
 }
 
-function undoLast() {
-  const last = state.history.pop();
-  if (!last) return;
+function renderWeeklyStats() {
+  const weekEntries = getLast7DaysEntries();
+  const weeklySales = weekEntries.reduce((sum, entry) => sum + (entry.grandTotal || 0), 0);
 
-  if (last.type === "sale") {
-    state.counts[last.itemId] = Math.max(0, (state.counts[last.itemId] || 0) - 1);
+  const aggregate = {};
+  ITEM_IDS.forEach((id) => {
+    aggregate[id] = 0;
+  });
 
-    if (last.payType === "cash") {
-      state.cash = Math.max(0, state.cash - last.price);
-    } else {
-      state.digital = Math.max(0, state.digital - last.price);
+  weekEntries.forEach((entry) => {
+    ITEM_IDS.forEach((id) => {
+      aggregate[id] += Number(entry.itemCounts?.[id] || 0);
+    });
+  });
+
+  let bestId = null;
+  let bestCount = 0;
+
+  ITEM_IDS.forEach((id) => {
+    if (aggregate[id] > bestCount) {
+      bestCount = aggregate[id];
+      bestId = id;
     }
+  });
 
-    const week = state.weekly[last.weekKey];
-    if (week) {
-      week.counts[last.itemId] = Math.max(0, (week.counts[last.itemId] || 0) - 1);
+  document.getElementById("weeklySales").textContent = formatMoney(weeklySales);
+  document.getElementById("weeklyTopSeller").textContent =
+    bestId && bestCount > 0 ? `${ITEMS[bestId].name} (${bestCount})` : "None yet";
+}
 
-      if (last.payType === "cash") {
-        week.cash = Math.max(0, week.cash - last.price);
-      } else {
-        week.digital = Math.max(0, week.digital - last.price);
-      }
+function getLast7DaysEntries() {
+  const entries = [...state.history];
+  const todayKey = getTodayKey();
+  const hasTodaySaved = entries.some((entry) => entry.dateKey === todayKey);
+
+  if (!hasTodaySaved && getTodaySales() > 0) {
+    entries.push(buildDaySummary(false));
+  }
+
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - 6);
+
+  return entries.filter((entry) => {
+    const entryDate = new Date(entry.dateKey + "T00:00:00");
+    return entryDate >= cutoff;
+  });
+}
+
+function renderHistory() {
+  const historyList = document.getElementById("historyList");
+
+  if (state.history.length === 0) {
+    historyList.innerHTML = "<p>No saved days yet.</p>";
+    return;
+  }
+
+  const newestFirst = [...state.history].reverse();
+
+  historyList.innerHTML = newestFirst
+    .map((day) => {
+      const itemLines = ITEM_IDS
+        .filter((id) => (day.itemCounts?.[id] || 0) > 0)
+        .map((id) => {
+          const qty = day.itemCounts[id];
+          const sales = qty * ITEMS[id].price;
+          return `<p>${ITEMS[id].name}: ${qty} (${formatMoney(sales)})</p>`;
+        })
+        .join("");
+
+      return `
+        <div class="history-entry">
+          <h3>${day.displayDate}</h3>
+          ${itemLines || "<p>No items</p>"}
+          <p><strong>Cash:</strong> ${formatMoney(day.cash)}</p>
+          <p><strong>Digital:</strong> ${formatMoney(day.digital)}</p>
+          <p><strong>Total Items:</strong> ${day.totalItems}</p>
+          <p><strong>Total Sales:</strong> ${formatMoney(day.grandTotal)}</p>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function updateScreen() {
+  const map = {
+    chipLocos: "chipLocosSold",
+    chipEsquite: "chipEsquiteSold",
+    maruchan: "maruchanSold",
+    churritos: "churritosSold",
+    esquiteVaso: "esquiteVasoSold",
+    esquiteCheetos: "esquiteCheetosSold",
+    classicLemonade: "classicLemonadeSold",
+    speciality: "specialitySold",
+    flavorAdd: "flavorAddSold"
+  };
+
+  ITEM_IDS.forEach((id) => {
+    document.getElementById(map[id]).textContent = state.todaySold[id];
+  });
+
+  document.getElementById("orderItems").textContent = getOrderItemCount();
+  document.getElementById("orderSubtotal").textContent = formatMoney(getOrderSubtotal());
+  document.getElementById("todaySales").textContent = formatMoney(getTodaySales());
+  document.getElementById("cashTotal").textContent = formatMoney(state.todayCash);
+  document.getElementById("digitalTotal").textContent = formatMoney(state.todayDigital);
+  document.getElementById("todayItems").textContent = getTodayItems();
+  document.getElementById("todayDate").textContent = getTodayLabel();
+
+  renderOrderList();
+  renderWeeklyStats();
+  renderHistory();
+}
+
+function addItem(itemId, tileEl) {
+  state.currentOrder[itemId] += 1;
+  state.actionStack.push(itemId);
+
+  playTapSound();
+  vibrateTap();
+  animateTile(tileEl);
+  showFloatMoney(tileEl, ITEMS[itemId].price);
+
+  saveState();
+  updateScreen();
+}
+
+function undoLastTap() {
+  const last = state.actionStack.pop();
+
+  if (!last) {
+    alert("Nothing to undo.");
+    return;
+  }
+
+  if (state.currentOrder[last] > 0) {
+    state.currentOrder[last] -= 1;
+  }
+
+  saveState();
+  updateScreen();
+}
+
+function clearCurrentOrder() {
+  const subtotal = getOrderSubtotal();
+
+  if (subtotal === 0) {
+    return;
+  }
+
+  const confirmClear = confirm("Clear the current order?");
+  if (!confirmClear) {
+    return;
+  }
+
+  state.currentOrder = createEmptyCounts();
+  state.actionStack = [];
+
+  saveState();
+  updateScreen();
+}
+
+function finalizeOrder(cashAmount, digitalAmount) {
+  const subtotal = getOrderSubtotal();
+
+  if (subtotal === 0) {
+    alert("Tap items first.");
+    return;
+  }
+
+  if (cashAmount < 0 || digitalAmount < 0) {
+    alert("Payment amounts can't be negative.");
+    return;
+  }
+
+  const combined = cashAmount + digitalAmount;
+  if (Math.abs(combined - subtotal) > 0.009) {
+    alert(`Payments must equal ${formatMoney(subtotal)}.`);
+    return;
+  }
+
+  ITEM_IDS.forEach((id) => {
+    state.todaySold[id] += state.currentOrder[id];
+  });
+
+  state.todayCash += cashAmount;
+  state.todayDigital += digitalAmount;
+
+  state.currentOrder = createEmptyCounts();
+  state.actionStack = [];
+
+  saveState();
+  updateScreen();
+}
+
+function checkoutOrder(method) {
+  const subtotal = getOrderSubtotal();
+
+  if (subtotal === 0) {
+    alert("Tap items first.");
+    return;
+  }
+
+  if (method === "cash") {
+    finalizeOrder(subtotal, 0);
+  } else {
+    finalizeOrder(0, subtotal);
+  }
+}
+
+function splitPaymentHalf() {
+  const subtotal = getOrderSubtotal();
+
+  if (subtotal === 0) {
+    alert("Tap items first.");
+    return;
+  }
+
+  const halfCash = Number((subtotal / 2).toFixed(2));
+  const halfDigital = Number((subtotal - halfCash).toFixed(2));
+
+  finalizeOrder(halfCash, halfDigital);
+}
+
+function splitPaymentCustom() {
+  const subtotal = getOrderSubtotal();
+
+  if (subtotal === 0) {
+    alert("Tap items first.");
+    return;
+  }
+
+  const input = prompt(`Order total is ${formatMoney(subtotal)}.\nEnter CASH amount:`);
+
+  if (input === null) {
+    return;
+  }
+
+  const cashAmount = Number(input);
+
+  if (Number.isNaN(cashAmount)) {
+    alert("Enter a valid number.");
+    return;
+  }
+
+  if (cashAmount < 0 || cashAmount > subtotal) {
+    alert(`Cash amount must be between $0 and ${subtotal.toFixed(2)}.`);
+    return;
+  }
+
+  const digitalAmount = Number((subtotal - cashAmount).toFixed(2));
+
+  finalizeOrder(Number(cashAmount.toFixed(2)), digitalAmount);
+}
+
+function buildDaySummary(useDisplayLabel = true) {
+  const itemCounts = {};
+  ITEM_IDS.forEach((id) => {
+    itemCounts[id] = state.todaySold[id];
+  });
+
+  return {
+    dateKey: getTodayKey(),
+    displayDate: useDisplayLabel ? getTodayLabel() : getTodayLabel(),
+    cash: state.todayCash,
+    digital: state.todayDigital,
+    totalItems: getTodayItems(),
+    grandTotal: getTodaySales(),
+    itemCounts
+  };
+}
+
+function launchConfetti() {
+  const container = document.getElementById("confettiContainer");
+  const colors = ["#ff6fa5", "#ffd166", "#7bd389", "#7aa7ff", "#ffffff"];
+
+  for (let i = 0; i < 70; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDuration = `${1100 + Math.random() * 700}ms`;
+    piece.style.transform = `translateY(0) rotate(${Math.random() * 180}deg)`;
+    container.appendChild(piece);
+
+    setTimeout(() => {
+      piece.remove();
+    }, 2000);
+  }
+}
+
+function saveDay() {
+  if (getOrderSubtotal() > 0) {
+    const continueSave = confirm("You still have items in the current order. Save the day anyway?");
+    if (!continueSave) {
+      return;
     }
   }
 
-  updateUI();
-  save();
+  if (getTodaySales() === 0) {
+    alert("No finished sales to save yet.");
+    return;
+  }
+
+  const todaySummary = buildDaySummary();
+  state.history = state.history.filter((entry) => entry.dateKey !== todaySummary.dateKey);
+  state.history.push(todaySummary);
+
+  state.todaySold = createEmptyCounts();
+  state.currentOrder = createEmptyCounts();
+  state.todayCash = 0;
+  state.todayDigital = 0;
+  state.actionStack = [];
+
+  saveState();
+  updateScreen();
+  launchConfetti();
+
+  alert("Day saved and reset for tomorrow.");
 }
 
 function resetDay() {
-  if (!confirm("Reset today's daily totals? Weekly tracking will stay.")) return;
-
-  ITEMS.forEach((item) => {
-    state.counts[item.id] = 0;
-  });
-
-  state.cash = 0;
-  state.digital = 0;
-  state.history = [];
-  state.pendingItemId = null;
-
-  clearSelectedCards();
-  updateUI();
-  save();
-}
-
-function saveWeekSnapshot() {
-  save(true);
-}
-
-function buildCards() {
-  els.cards.innerHTML = ITEMS.map((item) => `
-    <div class="card" data-id="${item.id}">
-      <div class="img-wrap">
-        <img src="${item.img}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/600x600?text=Add+PNG'">
-        <div class="price-tag">$${item.price}</div>
-      </div>
-      <div class="count-box" id="count-${item.id}">0 sold</div>
-      <div class="tap-zone">
-        <button class="tap-btn ${item.id === "flavor-add" ? "flavor-btn" : ""}" onclick="selectItem('${item.id}')">Tap To Select</button>
-      </div>
-    </div>
-  `).join("");
-}
-
-function updateWeeklyUI() {
-  const weekKey = currentWeekKey();
-  ensureWeekExists(weekKey);
-  const week = state.weekly[weekKey];
-
-  const counts = week.counts || {};
-  const weekSales = (week.cash || 0) + (week.digital || 0);
-
-  let weekItems = 0;
-  let topName = "—";
-  let topQty = 0;
-
-  const rows = ITEMS.map((item) => {
-    const qty = counts[item.id] || 0;
-    weekItems += qty;
-
-    if (qty > topQty) {
-      topQty = qty;
-      topName = item.name;
-    }
-
-    return {
-      name: item.name,
-      qty,
-      sales: qty * item.price
-    };
-  }).sort((a, b) => b.qty - a.qty);
-
-  els.weekSales.textContent = money(weekSales);
-  els.weekItems.textContent = weekItems;
-  els.weekTopSeller.textContent = topName;
-  els.weekTopQty.textContent = topQty;
-
-  els.weeklyBreakdown.innerHTML = rows.map((r) => `
-    <div class="weekly-row">
-      <div>${r.name}</div>
-      <div>${r.qty} sold</div>
-      <div>${money(r.sales)}</div>
-    </div>
-  `).join("");
-}
-
-function updateUI() {
-  let totalItems = 0;
-
-  ITEMS.forEach((item) => {
-    const count = state.counts[item.id] || 0;
-    totalItems += count;
-
-    const countEl = document.getElementById(`count-${item.id}`);
-    if (countEl) countEl.textContent = `${count} sold`;
-  });
-
-  els.totalItems.textContent = totalItems;
-  els.totalSales.textContent = money(state.cash + state.digital);
-  els.cashTotal.textContent = money(state.cash);
-  els.digitalTotal.textContent = money(state.digital);
-
-  updatePendingUI();
-  updateWeeklyUI();
-}
-
-function fireConfetti() {
-  const canvas = document.getElementById("confetti");
-  const ctx = canvas.getContext("2d");
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  const pieces = Array.from({ length: 140 }, () => ({
-    x: Math.random() * canvas.width,
-    y: -20 - Math.random() * canvas.height * 0.3,
-    w: 6 + Math.random() * 8,
-    h: 8 + Math.random() * 10,
-    vy: 2 + Math.random() * 4,
-    vx: -2 + Math.random() * 4,
-    rot: Math.random() * Math.PI,
-    vr: -0.2 + Math.random() * 0.4,
-    color: ["#ef3ea8", "#a8ef36", "#111111", "#ffd84d", "#f3b3d5"][Math.floor(Math.random() * 5)]
-  }));
-
-  let frame = 0;
-
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    pieces.forEach((p) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.rot += p.vr;
-
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-      ctx.restore();
-    });
-
-    frame++;
-    if (frame < 160) {
-      requestAnimationFrame(draw);
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
+  const confirmReset = confirm("Reset today's sales and current order without saving?");
+  if (!confirmReset) {
+    return;
   }
 
-  draw();
+  state.todaySold = createEmptyCounts();
+  state.currentOrder = createEmptyCounts();
+  state.todayCash = 0;
+  state.todayDigital = 0;
+  state.actionStack = [];
+
+  saveState();
+  updateScreen();
 }
 
-els.cashBtn.addEventListener("click", () => submitPendingSale("cash"));
-els.digitalBtn.addEventListener("click", () => submitPendingSale("digital"));
-els.undoBtn.addEventListener("click", undoLast);
-els.resetBtn.addEventListener("click", resetDay);
-els.saveWeekBtn.addEventListener("click", saveWeekSnapshot);
-
-load();
-buildCards();
-updateUI();
-
-window.selectItem = selectItem;
+updateScreen();
