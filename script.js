@@ -1,481 +1,769 @@
-const ITEMS = {
-  chipLocos: { name: "Chip Locos", price: 8 },
-  chipEsquite: { name: "Chip Esquite", price: 9 },
-  maruchan: { name: "Maruchan Preparada", price: 12 },
-  churritos: { name: "Churritos Locos", price: 8 },
-  esquiteVaso: { name: "Esquite en Vaso", price: 6 },
-  esquiteCheetos: { name: "Esquite con Cheetos", price: 7 },
-  classicLemonade: { name: "Classic Lemonade", price: 6 },
-  speciality: { name: "Speciality", price: 8 },
-  flavorAdd: { name: "Flavor Add", price: 1 }
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import {
+  getDatabase,
+  ref,
+  push,
+  set,
+  remove,
+  onValue
+} from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "PASTE_YOURS",
+  authDomain: "PASTE_YOURS",
+  databaseURL: "PASTE_YOURS",
+  projectId: "PASTE_YOURS",
+  storageBucket: "PASTE_YOURS",
+  messagingSenderId: "PASTE_YOURS",
+  appId: "PASTE_YOURS"
 };
 
-const ITEM_IDS = Object.keys(ITEMS);
-const STORAGE_KEY = "antojitosPosStateV1";
-const tapSound = new Audio("sounds/tap.mp3");
-tapSound.preload = "auto";
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-let state = loadState();
+const CLASSIC_FLAVORS = [
+  "Strawberry",
+  "Watermelon",
+  "Mango",
+  "Pineapple",
+  "Blue Raspberry",
+  "Coconut",
+  "Orange",
+  "Kiwi",
+  "Peach",
+  "Sour Gummy Worm",
+  "Passion Fruit",
+  "Cherry",
+  "Green Apple"
+];
 
-function createEmptyCounts() {
-  const counts = {};
-  ITEM_IDS.forEach((id) => {
-    counts[id] = 0;
-  });
-  return counts;
-}
+const LEMONADE_ADDONS = [
+  "Candy",
+  "Cueritos",
+  "Cacahuates",
+  ...CLASSIC_FLAVORS
+];
 
-function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+const SPECIALTIES = {
+  "Mango Madness": ["Mango", "Chamoy", "Tajin", "Candy"],
+  "Blue Beam": ["Blue Raspberry", "Candy"],
+  "Orange Creamsicle": ["Orange", "Cream"],
+  "Electric Island": ["Blue Raspberry", "Coconut", "Candy"],
+  "Peachy Paradise": ["Peach", "Candy"],
+  "Strawberry Smash": ["Strawberry", "Candy"],
+  "Strawberries & Cream": ["Strawberry", "Cream"],
+  "Pink Pines": ["Pineapple", "Strawberry", "Candy"]
+};
 
-  if (!raw) {
-    return {
-      todaySold: createEmptyCounts(),
-      currentOrder: createEmptyCounts(),
-      todayCash: 0,
-      todayDigital: 0,
-      history: [],
-      actionStack: []
-    };
+const SNACKS = {
+  "Chip Locos": {
+    price: 8,
+    ingredients: ["Pepino", "Jicama", "Cueritos", "Mango", "Cacahuates", "Chaca Chaca", "Chamoy", "Limon", "Tajin"]
+  },
+  "Chip Esquite": {
+    price: 9,
+    ingredients: ["Elote", "Mayonesa", "Mantequilla", "Queso"]
+  },
+  "Maruchan Preparada": {
+    price: 12,
+    ingredients: ["Chips", "Elote", "Mayonesa", "Mantequilla", "Queso"]
+  },
+  "Churritos Locos": {
+    price: 8,
+    ingredients: ["Pepino", "Jicama", "Cueritos", "Cacahuates", "Chaca Chaca", "Clamato", "Chamoy", "Limon", "Tajin"]
+  },
+  "Esquite Vaso": {
+    price: 6,
+    ingredients: []
+  },
+  "Esquite con Cheetos": {
+    price: 7,
+    ingredients: []
   }
+};
 
-  const saved = JSON.parse(raw);
+const MENU_BOXES = [
+  { name: "Classic Lemonade", priceLabel: "$6", image: "images/lemonade-box.png", soldKey: "Classic Lemonade" },
+  { name: "Specialty Lemonade", priceLabel: "$8", image: "images/lemonade-box.png", soldKey: "Specialty Lemonade" },
+  { name: "Chip Locos", priceLabel: "$8", image: "images/chip-locos.png", soldKey: "Chip Locos" },
+  { name: "Chip Esquite", priceLabel: "$9", image: "images/chip-esquite.png", soldKey: "Chip Esquite" },
+  { name: "Maruchan Preparada", priceLabel: "$12", image: "images/maruchan-preparada.png", soldKey: "Maruchan Preparada" },
+  { name: "Churritos Locos", priceLabel: "$8", image: "images/churritos-locos.png", soldKey: "Churritos Locos" },
+  { name: "Esquite Vaso", priceLabel: "$6", image: "images/esquite-vaso.png", soldKey: "Esquite Vaso" },
+  { name: "Esquite con Cheetos", priceLabel: "$7", image: "images/esquite-con-cheetos.png", soldKey: "Esquite con Cheetos" }
+];
 
-  return {
-    todaySold: { ...createEmptyCounts(), ...(saved.todaySold || {}) },
-    currentOrder: { ...createEmptyCounts(), ...(saved.currentOrder || {}) },
-    todayCash: Number(saved.todayCash) || 0,
-    todayDigital: Number(saved.todayDigital) || 0,
-    history: Array.isArray(saved.history) ? saved.history : [],
-    actionStack: Array.isArray(saved.actionStack) ? saved.actionStack : []
-  };
+let trackerState = {
+  sales: {},
+  days: {}
+};
+
+let draftItems = [];
+let builder = { data: {} };
+let editingDraftIndex = null;
+let selectedHistoryDay = null;
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function escapeForSingleQuote(str) {
+  return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
-function formatMoney(amount) {
-  return `$${amount.toFixed(2)}`;
+function nowLabel() {
+  return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function getTodayKey() {
+function todayKey() {
   const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function getTodayLabel() {
+function todayLabel() {
   return new Date().toLocaleDateString();
 }
 
-function getOrderSubtotal() {
-  return ITEM_IDS.reduce((sum, id) => sum + state.currentOrder[id] * ITEMS[id].price, 0);
+function clone(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
-function getOrderItemCount() {
-  return ITEM_IDS.reduce((sum, id) => sum + state.currentOrder[id], 0);
+function getWeekStart(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day;
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-function getTodaySales() {
-  return state.todayCash + state.todayDigital;
-}
-
-function getTodayItems() {
-  return ITEM_IDS.reduce((sum, id) => sum + state.todaySold[id], 0);
-}
-
-function playTapSound() {
-  tapSound.currentTime = 0;
-  tapSound.play().catch(() => {});
-}
-
-function vibrateTap() {
-  if ("vibrate" in navigator) {
-    navigator.vibrate(25);
-  }
-}
-
-function showFloatMoney(tileEl, amount) {
-  const bubble = document.createElement("div");
-  bubble.className = "float-money";
-  bubble.textContent = `+$${amount}`;
-  tileEl.appendChild(bubble);
-
-  setTimeout(() => {
-    bubble.remove();
-  }, 900);
-}
-
-function animateTile(tileEl) {
-  tileEl.classList.remove("pop");
-  void tileEl.offsetWidth;
-  tileEl.classList.add("pop");
-}
-
-function renderOrderList() {
-  const orderList = document.getElementById("orderList");
-  const subtotal = getOrderSubtotal();
-
-  if (subtotal === 0) {
-    orderList.innerHTML = `<div class="empty-order"><span>No items yet</span><span>Tap a box</span></div>`;
-    return;
-  }
-
-  const rows = ITEM_IDS
-    .filter((id) => state.currentOrder[id] > 0)
-    .map((id) => {
-      const qty = state.currentOrder[id];
-      const total = qty * ITEMS[id].price;
-      return `
-        <div class="order-item-row">
-          <span>${ITEMS[id].name} x${qty}</span>
-          <strong>${formatMoney(total)}</strong>
-        </div>
-      `;
-    })
-    .join("");
-
-  orderList.innerHTML = rows;
-}
-
-function renderWeeklyStats() {
-  const weekEntries = getLast7DaysEntries();
-  const weeklySales = weekEntries.reduce((sum, entry) => sum + (entry.grandTotal || 0), 0);
-
-  const aggregate = {};
-  ITEM_IDS.forEach((id) => {
-    aggregate[id] = 0;
-  });
-
-  weekEntries.forEach((entry) => {
-    ITEM_IDS.forEach((id) => {
-      aggregate[id] += Number(entry.itemCounts?.[id] || 0);
-    });
-  });
-
-  let bestId = null;
+function topLabel(counts) {
+  let best = "—";
   let bestCount = 0;
 
-  ITEM_IDS.forEach((id) => {
-    if (aggregate[id] > bestCount) {
-      bestCount = aggregate[id];
-      bestId = id;
+  Object.entries(counts || {}).forEach(([name, count]) => {
+    if (count > bestCount) {
+      best = `${name} (${count})`;
+      bestCount = count;
     }
   });
 
-  document.getElementById("weeklySales").textContent = formatMoney(weeklySales);
-  document.getElementById("weeklyTopSeller").textContent =
-    bestId && bestCount > 0 ? `${ITEMS[bestId].name} (${bestCount})` : "None yet";
+  return bestCount ? best : "—";
 }
 
-function getLast7DaysEntries() {
-  const entries = [...state.history];
-  const todayKey = getTodayKey();
-  const hasTodaySaved = entries.some((entry) => entry.dateKey === todayKey);
+function totalsFromSales(salesObject) {
+  let cash = 0;
+  let cashApp = 0;
+  let applePay = 0;
+  let square = 0;
 
-  if (!hasTodaySaved && getTodaySales() > 0) {
-    entries.push(buildDaySummary(false));
-  }
-
-  const cutoff = new Date();
-  cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - 6);
-
-  return entries.filter((entry) => {
-    const entryDate = new Date(entry.dateKey + "T00:00:00");
-    return entryDate >= cutoff;
-  });
-}
-
-function renderHistory() {
-  const historyList = document.getElementById("historyList");
-
-  if (state.history.length === 0) {
-    historyList.innerHTML = "<p>No saved days yet.</p>";
-    return;
-  }
-
-  const newestFirst = [...state.history].reverse();
-
-  historyList.innerHTML = newestFirst
-    .map((day) => {
-      const itemLines = ITEM_IDS
-        .filter((id) => (day.itemCounts?.[id] || 0) > 0)
-        .map((id) => {
-          const qty = day.itemCounts[id];
-          const sales = qty * ITEMS[id].price;
-          return `<p>${ITEMS[id].name}: ${qty} (${formatMoney(sales)})</p>`;
-        })
-        .join("");
-
-      return `
-        <div class="history-entry">
-          <h3>${day.displayDate}</h3>
-          ${itemLines || "<p>No items</p>"}
-          <p><strong>Cash:</strong> ${formatMoney(day.cash)}</p>
-          <p><strong>Digital:</strong> ${formatMoney(day.digital)}</p>
-          <p><strong>Total Items:</strong> ${day.totalItems}</p>
-          <p><strong>Total Sales:</strong> ${formatMoney(day.grandTotal)}</p>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-function updateScreen() {
-  const map = {
-    chipLocos: "chipLocosSold",
-    chipEsquite: "chipEsquiteSold",
-    maruchan: "maruchanSold",
-    churritos: "churritosSold",
-    esquiteVaso: "esquiteVasoSold",
-    esquiteCheetos: "esquiteCheetosSold",
-    classicLemonade: "classicLemonadeSold",
-    speciality: "specialitySold",
-    flavorAdd: "flavorAddSold"
-  };
-
-  ITEM_IDS.forEach((id) => {
-    document.getElementById(map[id]).textContent = state.todaySold[id];
-  });
-
-  document.getElementById("orderItems").textContent = getOrderItemCount();
-  document.getElementById("orderSubtotal").textContent = formatMoney(getOrderSubtotal());
-  document.getElementById("todaySales").textContent = formatMoney(getTodaySales());
-  document.getElementById("cashTotal").textContent = formatMoney(state.todayCash);
-  document.getElementById("digitalTotal").textContent = formatMoney(state.todayDigital);
-  document.getElementById("todayItems").textContent = getTodayItems();
-  document.getElementById("todayDate").textContent = getTodayLabel();
-
-  renderOrderList();
-  renderWeeklyStats();
-  renderHistory();
-}
-
-function addItem(itemId, tileEl) {
-  state.currentOrder[itemId] += 1;
-  state.actionStack.push(itemId);
-
-  playTapSound();
-  vibrateTap();
-  animateTile(tileEl);
-  showFloatMoney(tileEl, ITEMS[itemId].price);
-
-  saveState();
-  updateScreen();
-}
-
-function undoLastTap() {
-  const last = state.actionStack.pop();
-
-  if (!last) {
-    alert("Nothing to undo.");
-    return;
-  }
-
-  if (state.currentOrder[last] > 0) {
-    state.currentOrder[last] -= 1;
-  }
-
-  saveState();
-  updateScreen();
-}
-
-function clearCurrentOrder() {
-  const subtotal = getOrderSubtotal();
-
-  if (subtotal === 0) {
-    return;
-  }
-
-  const confirmClear = confirm("Clear the current order?");
-  if (!confirmClear) {
-    return;
-  }
-
-  state.currentOrder = createEmptyCounts();
-  state.actionStack = [];
-
-  saveState();
-  updateScreen();
-}
-
-function finalizeOrder(cashAmount, digitalAmount) {
-  const subtotal = getOrderSubtotal();
-
-  if (subtotal === 0) {
-    alert("Tap items first.");
-    return;
-  }
-
-  if (cashAmount < 0 || digitalAmount < 0) {
-    alert("Payment amounts can't be negative.");
-    return;
-  }
-
-  const combined = cashAmount + digitalAmount;
-  if (Math.abs(combined - subtotal) > 0.009) {
-    alert(`Payments must equal ${formatMoney(subtotal)}.`);
-    return;
-  }
-
-  ITEM_IDS.forEach((id) => {
-    state.todaySold[id] += state.currentOrder[id];
-  });
-
-  state.todayCash += cashAmount;
-  state.todayDigital += digitalAmount;
-
-  state.currentOrder = createEmptyCounts();
-  state.actionStack = [];
-
-  saveState();
-  updateScreen();
-}
-
-function checkoutOrder(method) {
-  const subtotal = getOrderSubtotal();
-
-  if (subtotal === 0) {
-    alert("Tap items first.");
-    return;
-  }
-
-  if (method === "cash") {
-    finalizeOrder(subtotal, 0);
-  } else {
-    finalizeOrder(0, subtotal);
-  }
-}
-
-function splitPaymentHalf() {
-  const subtotal = getOrderSubtotal();
-
-  if (subtotal === 0) {
-    alert("Tap items first.");
-    return;
-  }
-
-  const halfCash = Number((subtotal / 2).toFixed(2));
-  const halfDigital = Number((subtotal - halfCash).toFixed(2));
-
-  finalizeOrder(halfCash, halfDigital);
-}
-
-function splitPaymentCustom() {
-  const subtotal = getOrderSubtotal();
-
-  if (subtotal === 0) {
-    alert("Tap items first.");
-    return;
-  }
-
-  const input = prompt(`Order total is ${formatMoney(subtotal)}.\nEnter CASH amount:`);
-
-  if (input === null) {
-    return;
-  }
-
-  const cashAmount = Number(input);
-
-  if (Number.isNaN(cashAmount)) {
-    alert("Enter a valid number.");
-    return;
-  }
-
-  if (cashAmount < 0 || cashAmount > subtotal) {
-    alert(`Cash amount must be between $0 and ${subtotal.toFixed(2)}.`);
-    return;
-  }
-
-  const digitalAmount = Number((subtotal - cashAmount).toFixed(2));
-
-  finalizeOrder(Number(cashAmount.toFixed(2)), digitalAmount);
-}
-
-function buildDaySummary(useDisplayLabel = true) {
-  const itemCounts = {};
-  ITEM_IDS.forEach((id) => {
-    itemCounts[id] = state.todaySold[id];
+  Object.values(salesObject || {}).forEach(sale => {
+    if (sale.payment?.type === "cash") {
+      cash += Number(sale.payment.total || 0);
+    }
+    if (sale.payment?.type === "digital") {
+      if (sale.payment.method === "Cash App") cashApp += Number(sale.payment.total || 0);
+      if (sale.payment.method === "Apple Pay") applePay += Number(sale.payment.total || 0);
+      if (sale.payment.method === "Square") square += Number(sale.payment.total || 0);
+    }
+    if (sale.payment?.type === "split") {
+      cash += Number(sale.payment.cashAmount || 0);
+      if (sale.payment.digitalMethod === "Cash App") cashApp += Number(sale.payment.digitalAmount || 0);
+      if (sale.payment.digitalMethod === "Apple Pay") applePay += Number(sale.payment.digitalAmount || 0);
+      if (sale.payment.digitalMethod === "Square") square += Number(sale.payment.digitalAmount || 0);
+    }
   });
 
   return {
-    dateKey: getTodayKey(),
-    displayDate: useDisplayLabel ? getTodayLabel() : getTodayLabel(),
-    cash: state.todayCash,
-    digital: state.todayDigital,
-    totalItems: getTodayItems(),
-    grandTotal: getTodaySales(),
-    itemCounts
+    cash,
+    cashApp,
+    applePay,
+    square,
+    dayTotal: cash + cashApp + applePay + square
   };
 }
 
-function launchConfetti() {
-  const container = document.getElementById("confettiContainer");
-  const colors = ["#ff6fa5", "#ffd166", "#7bd389", "#7aa7ff", "#ffffff"];
+function getCountsFromSales(salesObject) {
+  const itemCounts = {};
+  const specialtyCounts = {};
 
-  for (let i = 0; i < 70; i++) {
-    const piece = document.createElement("div");
-    piece.className = "confetti-piece";
-    piece.style.left = `${Math.random() * 100}%`;
-    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
-    piece.style.animationDuration = `${1100 + Math.random() * 700}ms`;
-    piece.style.transform = `translateY(0) rotate(${Math.random() * 180}deg)`;
-    container.appendChild(piece);
+  Object.values(salesObject || {}).forEach(sale => {
+    (sale.items || []).forEach(item => {
+      const qty = Number(item.quantity || 0);
+      itemCounts[item.name] = (itemCounts[item.name] || 0) + qty;
 
-    setTimeout(() => {
-      piece.remove();
-    }, 2000);
-  }
+      if (item.specialtyName) {
+        specialtyCounts[item.specialtyName] = (specialtyCounts[item.specialtyName] || 0) + qty;
+      }
+    });
+  });
+
+  return { itemCounts, specialtyCounts };
 }
 
-function saveDay() {
-  if (getOrderSubtotal() > 0) {
-    const continueSave = confirm("You still have items in the current order. Save the day anyway?");
-    if (!continueSave) {
-      return;
+function choiceButtons(items, key, isMulti = false) {
+  return `
+    <div class="choice-grid">
+      ${items.map(item => {
+        const selected = isMulti
+          ? (Array.isArray(builder.data[key]) && builder.data[key].includes(item))
+          : builder.data[key] === item;
+
+        const safe = escapeForSingleQuote(item);
+        const cls = selected
+          ? `choice-btn selected ${isMulti ? "multi-selected" : ""}`
+          : "choice-btn";
+
+        const click = isMulti
+          ? `toggleBuilderArray('${key}', '${safe}')`
+          : `setBuilderValue('${key}', '${safe}')`;
+
+        return `<button type="button" class="${cls}" onclick="${click}">${item}</button>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderBoxMenu() {
+  const { itemCounts } = getCountsFromSales(trackerState.sales);
+  const box = document.getElementById("boxMenu");
+
+  box.innerHTML = MENU_BOXES.map(item => `
+    <button type="button" class="menu-box" style="background-image:url('${item.image}')" onclick="selectMenuBox('${escapeForSingleQuote(item.name)}')">
+      <div class="menu-box-content">
+        <h3>${item.name}</h3>
+        <p>${item.priceLabel}</p>
+        <p>Today Sold: ${itemCounts[item.soldKey] || 0}</p>
+      </div>
+    </button>
+  `).join("");
+}
+
+window.selectMenuBox = function (name) {
+  builder = { data: { itemType: name } };
+  editingDraftIndex = null;
+  renderBuilder();
+  renderReview();
+};
+
+window.goHome = function () {
+  history.pushState({}, "", window.location.pathname);
+  renderScreen();
+};
+
+window.goHistory = function () {
+  history.pushState({}, "", `${window.location.pathname}?view=history`);
+  renderScreen();
+};
+
+window.selectHistoryDay = function (dayKey) {
+  history.pushState({}, "", `${window.location.pathname}?view=history&day=${encodeURIComponent(dayKey)}`);
+  renderScreen();
+};
+
+window.addEventListener("popstate", renderScreen);
+
+window.clearBuilder = function () {
+  builder = { data: {} };
+  editingDraftIndex = null;
+  renderBuilder();
+  renderReview();
+};
+
+window.setBuilderValue = function (key, value) {
+  builder.data[key] = value;
+  renderBuilder();
+  renderReview();
+};
+
+window.toggleBuilderArray = function (key, value) {
+  if (!Array.isArray(builder.data[key])) builder.data[key] = [];
+  const arr = builder.data[key];
+  const idx = arr.indexOf(value);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(value);
+  renderBuilder();
+  renderReview();
+};
+
+function renderBuilder() {
+  const el = document.getElementById("builderStage");
+  if (!el) return;
+
+  const type = builder.data.itemType;
+
+  if (!type) {
+    el.innerHTML = `<p>Tap a box to begin.</p>`;
+    return;
+  }
+
+  let html = `<h3>${type}</h3>`;
+
+  if (type === "Classic Lemonade") {
+    html += `
+      <h4>1. Quantity</h4>
+      ${choiceButtons(["1", "2", "3", "4", "5"], "quantity")}
+    `;
+    if (builder.data.quantity) {
+      html += `
+        <h4>2. Add On +$1</h4>
+        ${choiceButtons(LEMONADE_ADDONS, "addons", true)}
+        <p class="helper">Tap as many add-ons as needed. Each selected add-on adds $1.</p>
+      `;
     }
   }
 
-  if (getTodaySales() === 0) {
-    alert("No finished sales to save yet.");
+  if (type === "Specialty Lemonade") {
+    html += `
+      <h4>1. Quantity</h4>
+      ${choiceButtons(["1", "2", "3", "4", "5"], "quantity")}
+    `;
+    if (builder.data.quantity) {
+      html += `
+        <h4>2. Choose Specialty</h4>
+        ${choiceButtons(Object.keys(SPECIALTIES), "specialtyDrink")}
+      `;
+      if (builder.data.specialtyDrink) {
+        html += `
+          <h4>Ingredients</h4>
+          <div class="review-card">
+            ${SPECIALTIES[builder.data.specialtyDrink].map(i => `<p>${i}</p>`).join("")}
+          </div>
+        `;
+      }
+    }
+  }
+
+  if (SNACKS[type]) {
+    html += `
+      <h4>1. Quantity</h4>
+      ${choiceButtons(["1", "2", "3", "4", "5"], "quantity")}
+    `;
+    if (builder.data.quantity && SNACKS[type].ingredients.length) {
+      html += `
+        <h4>Ingredients</h4>
+        <div class="review-card">
+          ${SNACKS[type].ingredients.map(i => `<p>${i}</p>`).join("")}
+        </div>
+      `;
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+function buildPreviewItem() {
+  const d = builder.data;
+  const qty = Number(d.quantity || 0);
+  const type = d.itemType;
+
+  if (!type || !qty) return null;
+
+  if (type === "Classic Lemonade") {
+    const addons = d.addons || [];
+    const addonCount = addons.length;
+    const unit = 6 + addonCount;
+    return {
+      kind: "classicLemonade",
+      name: "Classic Lemonade",
+      quantity: qty,
+      unitPrice: unit,
+      totalPrice: unit * qty,
+      lines: [`Quantity: ${qty}`, ...(addons.length ? [`Add Ons: ${addons.join(", ")}`] : [])]
+    };
+  }
+
+  if (type === "Specialty Lemonade") {
+    if (!d.specialtyDrink) return null;
+    return {
+      kind: "specialtyLemonade",
+      name: d.specialtyDrink,
+      quantity: qty,
+      unitPrice: 8,
+      totalPrice: 8 * qty,
+      lines: [`Quantity: ${qty}`, ...SPECIALTIES[d.specialtyDrink]],
+      specialtyName: d.specialtyDrink
+    };
+  }
+
+  if (SNACKS[type]) {
+    return {
+      kind: type,
+      name: type,
+      quantity: qty,
+      unitPrice: SNACKS[type].price,
+      totalPrice: SNACKS[type].price * qty,
+      lines: [`Quantity: ${qty}`, ...SNACKS[type].ingredients]
+    };
+  }
+
+  return null;
+}
+
+function renderReview() {
+  const card = document.getElementById("reviewCard");
+  const preview = buildPreviewItem();
+
+  if (!preview) {
+    card.innerHTML = `<p>No item being built yet.</p>`;
     return;
   }
 
-  const todaySummary = buildDaySummary();
-  state.history = state.history.filter((entry) => entry.dateKey !== todaySummary.dateKey);
-  state.history.push(todaySummary);
-
-  state.todaySold = createEmptyCounts();
-  state.currentOrder = createEmptyCounts();
-  state.todayCash = 0;
-  state.todayDigital = 0;
-  state.actionStack = [];
-
-  saveState();
-  updateScreen();
-  launchConfetti();
-
-  alert("Day saved and reset for tomorrow.");
+  card.innerHTML = `
+    <p><strong>${preview.name}</strong></p>
+    ${preview.lines.map(line => `<p>${line}</p>`).join("")}
+    <p><strong>Total:</strong> ${formatMoney(preview.totalPrice)}</p>
+  `;
 }
 
-function resetDay() {
-  const confirmReset = confirm("Reset today's sales and current order without saving?");
-  if (!confirmReset) {
+window.addBuiltItemToDraft = function () {
+  const preview = buildPreviewItem();
+  if (!preview) {
+    alert("Finish building the item first.");
     return;
   }
 
-  state.todaySold = createEmptyCounts();
-  state.currentOrder = createEmptyCounts();
-  state.todayCash = 0;
-  state.todayDigital = 0;
-  state.actionStack = [];
+  const itemToStore = {
+    ...preview,
+    builderData: clone(builder.data)
+  };
 
-  saveState();
-  updateScreen();
+  if (editingDraftIndex !== null) {
+    draftItems[editingDraftIndex] = itemToStore;
+  } else {
+    draftItems.push(itemToStore);
+  }
+
+  editingDraftIndex = null;
+  builder = { data: {} };
+  renderBuilder();
+  renderReview();
+  renderDraft();
+};
+
+window.editDraftItem = function (index) {
+  const item = draftItems[index];
+  if (!item) return;
+  builder = { data: clone(item.builderData) };
+  editingDraftIndex = index;
+  renderBuilder();
+  renderReview();
+};
+
+window.removeDraftItem = function (index) {
+  draftItems.splice(index, 1);
+  renderDraft();
+};
+
+window.clearDraft = function () {
+  if (!draftItems.length) return;
+  if (!confirm("Clear the current draft?")) return;
+  draftItems = [];
+  builder = { data: {} };
+  editingDraftIndex = null;
+  renderBuilder();
+  renderReview();
+  renderDraft();
+};
+
+function renderDraft() {
+  const list = document.getElementById("draftOrderList");
+  const total = draftItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  document.getElementById("draftTotal").textContent = formatMoney(total);
+  document.getElementById("editingNotice").classList.toggle("hidden", editingDraftIndex === null);
+
+  if (!draftItems.length) {
+    list.innerHTML = `<p>No items in draft yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = draftItems.map((item, index) => `
+    <div class="order-item">
+      <div class="order-item-head">
+        <div>
+          <p><strong>${item.name}</strong></p>
+          ${item.lines.map(line => `<p>${line}</p>`).join("")}
+          <p><strong>${formatMoney(item.totalPrice)}</strong></p>
+        </div>
+      </div>
+      <div class="order-actions">
+        <button type="button" class="action-btn" onclick="editDraftItem(${index})">Edit Item</button>
+        <button type="button" class="action-btn delete-btn" onclick="removeDraftItem(${index})">Remove</button>
+      </div>
+    </div>
+  `).join("");
 }
 
-updateScreen();
+window.addDraftToToday = async function () {
+  if (!draftItems.length) {
+    alert("Add at least one item first.");
+    return;
+  }
+
+  const subtotal = draftItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  const mode = prompt("Payment type:\nEnter exactly:\nCash\nDigital\nSplit");
+  if (mode === null) return;
+
+  const cleanedMode = mode.trim().toLowerCase();
+  let payment = null;
+
+  if (cleanedMode === "cash") {
+    payment = { type: "cash", total: subtotal };
+  } else if (cleanedMode === "digital") {
+    const method = prompt("Enter digital method exactly:\nCash App\nApple Pay\nSquare");
+    if (method === null) return;
+    const m = method.trim();
+    if (!["Cash App", "Apple Pay", "Square"].includes(m)) {
+      alert("Enter Cash App, Apple Pay, or Square exactly.");
+      return;
+    }
+    payment = { type: "digital", method: m, total: subtotal };
+  } else if (cleanedMode === "split") {
+    const cashInput = prompt(`Sale total is ${formatMoney(subtotal)}.\nEnter CASH amount only:`);
+    if (cashInput === null) return;
+    const cashAmount = Number(cashInput);
+    if (Number.isNaN(cashAmount) || cashAmount < 0 || cashAmount > subtotal) {
+      alert("Invalid cash amount.");
+      return;
+    }
+    const digitalAmount = Number((subtotal - cashAmount).toFixed(2));
+    const method = prompt(`Digital amount is ${formatMoney(digitalAmount)}.\nEnter digital method exactly:\nCash App\nApple Pay\nSquare`);
+    if (method === null) return;
+    const m = method.trim();
+    if (!["Cash App", "Apple Pay", "Square"].includes(m)) {
+      alert("Enter Cash App, Apple Pay, or Square exactly.");
+      return;
+    }
+
+    payment = {
+      type: "split",
+      total: subtotal,
+      cashAmount,
+      digitalAmount,
+      digitalMethod: m
+    };
+  } else {
+    alert("Enter Cash, Digital, or Split.");
+    return;
+  }
+
+  const saleRef = push(ref(db, "tiaTracker/current/sales"));
+  await set(saleRef, {
+    createdAt: Date.now(),
+    createdLabel: nowLabel(),
+    subtotal,
+    payment,
+    items: clone(draftItems)
+  });
+
+  draftItems = [];
+  builder = { data: {} };
+  editingDraftIndex = null;
+  renderBuilder();
+  renderReview();
+  renderDraft();
+};
+
+window.removeSale = async function (saleKey) {
+  if (!confirm("Remove this sale?")) return;
+  await remove(ref(db, `tiaTracker/current/sales/${saleKey}`));
+};
+
+function renderTodaySales() {
+  const box = document.getElementById("todaySalesList");
+  const entries = Object.entries(trackerState.sales || {}).sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
+
+  box.innerHTML = entries.length
+    ? entries.map(([key, sale]) => `
+      <div class="sale-card">
+        <p><strong>${sale.createdLabel}</strong> — ${formatMoney(sale.subtotal)}</p>
+        ${sale.items.map(item => `
+          <div class="order-item">
+            <p><strong>${item.name}</strong></p>
+            ${item.lines.map(line => `<p>${line}</p>`).join("")}
+          </div>
+        `).join("")}
+        <p><strong>Payment:</strong> ${sale.payment?.type || "—"} ${sale.payment?.method || sale.payment?.digitalMethod || ""}</p>
+        <div class="order-actions">
+          <button type="button" class="action-btn delete-btn" onclick="removeSale('${key}')">Remove</button>
+        </div>
+      </div>
+    `).join("")
+    : "<p>No sales yet.</p>";
+}
+
+function renderMainScreen() {
+  renderBoxMenu();
+  renderBuilder();
+  renderReview();
+  renderDraft();
+  renderTodaySales();
+
+  const totals = totalsFromSales(trackerState.sales);
+  const { itemCounts } = getCountsFromSales(trackerState.sales);
+
+  document.getElementById("dayTotal").textContent = formatMoney(totals.dayTotal);
+  document.getElementById("cashTotal").textContent = formatMoney(totals.cash);
+  document.getElementById("cashAppTotal").textContent = formatMoney(totals.cashApp);
+  document.getElementById("applePayTotal").textContent = formatMoney(totals.applePay);
+  document.getElementById("squareTotal").textContent = formatMoney(totals.square);
+  document.getElementById("topSeller").textContent = topLabel(itemCounts);
+
+  const itemCountsBox = document.getElementById("itemCountsBox");
+  const countEntries = Object.entries(itemCounts).filter(([, count]) => count > 0);
+  itemCountsBox.innerHTML = countEntries.length
+    ? countEntries.map(([name, count]) => `<p><strong>${name}:</strong> ${count}</p>`).join("")
+    : "<p>No sales yet.</p>";
+
+  renderWeeklyStats();
+}
+
+function renderWeeklyStats() {
+  const start = getWeekStart();
+  let weekTotal = 0;
+  const weekItemCounts = {};
+
+  Object.values(trackerState.days || {}).forEach(day => {
+    const created = new Date(day.createdAt || 0);
+    if (created >= start) {
+      weekTotal += Number(day.totals?.dayTotal || 0);
+      Object.entries(day.itemCounts || {}).forEach(([k, v]) => {
+        weekItemCounts[k] = (weekItemCounts[k] || 0) + v;
+      });
+    }
+  });
+
+  document.getElementById("weekTotal").textContent = formatMoney(weekTotal);
+  document.getElementById("weekTopSeller").textContent = topLabel(weekItemCounts);
+}
+
+window.saveDay = async function () {
+  const totals = totalsFromSales(trackerState.sales);
+  const { itemCounts, specialtyCounts } = getCountsFromSales(trackerState.sales);
+
+  if (!Object.keys(trackerState.sales || {}).length) {
+    alert("No sales to save yet.");
+    return;
+  }
+
+  await set(ref(db, `tiaTracker/days/${todayKey()}`), {
+    label: todayLabel(),
+    createdAt: Date.now(),
+    sales: clone(trackerState.sales || {}),
+    totals,
+    itemCounts,
+    specialtyCounts
+  });
+
+  await set(ref(db, "tiaTracker/current/sales"), {});
+
+  draftItems = [];
+  builder = { data: {} };
+  editingDraftIndex = null;
+  renderBuilder();
+  renderReview();
+  renderDraft();
+  alert("Day saved.");
+};
+
+window.resetDay = async function () {
+  if (!confirm("Reset today without saving?")) return;
+
+  await set(ref(db, "tiaTracker/current/sales"), {});
+
+  draftItems = [];
+  builder = { data: {} };
+  editingDraftIndex = null;
+  renderBuilder();
+  renderReview();
+  renderDraft();
+  alert("Day reset.");
+};
+
+function renderHistoryScreen() {
+  const daysList = document.getElementById("historyDaysList");
+  const detail = document.getElementById("historyDetail");
+  const detailTitle = document.getElementById("historyDetailTitle");
+
+  const dayEntries = Object.entries(trackerState.days || {}).sort((a, b) => b[0].localeCompare(a[0]));
+
+  if (!dayEntries.length) {
+    daysList.innerHTML = "<p>No saved days yet.</p>";
+    detail.innerHTML = "<p>Select a day.</p>";
+    detailTitle.textContent = "Day Details";
+    return;
+  }
+
+  daysList.innerHTML = dayEntries.map(([dayKey, day]) => `
+    <div class="history-day-card">
+      <p><strong>${day.label || dayKey}</strong></p>
+      <p>Total: ${formatMoney(day.totals?.dayTotal || 0)}</p>
+      <p>Top Seller: ${topLabel(day.itemCounts || {})}</p>
+      <div class="order-actions">
+        <button type="button" class="action-btn" onclick="selectHistoryDay('${dayKey}')">View Day</button>
+      </div>
+    </div>
+  `).join("");
+
+  if (!selectedHistoryDay || !trackerState.days[selectedHistoryDay]) {
+    detail.innerHTML = "<p>Select a day.</p>";
+    detailTitle.textContent = "Day Details";
+    return;
+  }
+
+  const day = trackerState.days[selectedHistoryDay];
+  detailTitle.textContent = `Day Details — ${day.label || selectedHistoryDay}`;
+
+  detail.innerHTML = `
+    <div class="totals-box">
+      <div class="line"><span>Total</span><strong>${formatMoney(day.totals?.dayTotal || 0)}</strong></div>
+      <div class="line"><span>Cash</span><strong>${formatMoney(day.totals?.cash || 0)}</strong></div>
+      <div class="line"><span>Cash App</span><strong>${formatMoney(day.totals?.cashApp || 0)}</strong></div>
+      <div class="line"><span>Apple Pay</span><strong>${formatMoney(day.totals?.applePay || 0)}</strong></div>
+      <div class="line"><span>Square</span><strong>${formatMoney(day.totals?.square || 0)}</strong></div>
+      <div class="line"><span>Top Seller</span><strong>${topLabel(day.itemCounts || {})}</strong></div>
+    </div>
+    ${Object.values(day.sales || {}).map(sale => `
+      <div class="history-order-card">
+        <p><strong>${sale.createdLabel}</strong> — ${formatMoney(sale.subtotal)}</p>
+        ${sale.items.map(item => `
+          <div class="order-item">
+            <p><strong>${item.name}</strong></p>
+            ${item.lines.map(line => `<p>${line}</p>`).join("")}
+          </div>
+        `).join("")}
+        <p><strong>Payment:</strong> ${sale.payment?.type || "—"} ${sale.payment?.method || sale.payment?.digitalMethod || ""}</p>
+      </div>
+    `).join("")}
+  `;
+}
+
+function renderScreen() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get("view");
+
+  document.getElementById("mainScreen").classList.toggle("hidden", view === "history");
+  document.getElementById("historyScreen").classList.toggle("hidden", view !== "history");
+
+  if (view === "history") {
+    selectedHistoryDay = params.get("day") || null;
+    renderHistoryScreen();
+  } else {
+    renderMainScreen();
+  }
+}
+
+function attachListeners() {
+  onValue(ref(db, "tiaTracker/current/sales"), snap => {
+    trackerState.sales = snap.val() || {};
+    renderScreen();
+  });
+
+  onValue(ref(db, "tiaTracker/days"), snap => {
+    trackerState.days = snap.val() || {};
+    renderScreen();
+  });
+}
+
+attachListeners();
+renderScreen();
