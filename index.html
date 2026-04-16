@@ -3,164 +3,166 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antojitos POS</title>
+  <title>Tia Antojitos Tracker</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app">
-    <header class="hero">
-      <h1>Antojitos POS</h1>
-      <p class="subtitle">Tap items, then choose payment</p>
-    </header>
+    <section id="mainScreen">
+      <header class="hero">
+        <h1>Tia Antojitos Tracker</h1>
+        <p class="subtitle">Daily sales tracker</p>
+      </header>
 
-    <section class="grid">
-      <button class="tile tile-chip-locos" onclick="addItem('chipLocos', this)">
-        <h2>Chip Locos</h2>
-        <p>$8</p>
-        <div class="count" id="chipLocosSold">0</div>
-        <div class="sold-label">Today Sold</div>
-      </button>
-
-      <button class="tile tile-chip-esquite" onclick="addItem('chipEsquite', this)">
-        <h2>Chip Esquite</h2>
-        <p>$9</p>
-        <div class="count" id="chipEsquiteSold">0</div>
-        <div class="sold-label">Today Sold</div>
-      </button>
-
-     <button class="tile tile-maruchan" onclick="addItem('maruchan', this)">
-  <h2>Maruchan Preparada</h2>
-  <p>$12</p>
-  <div class="count" id="maruchanSold">0</div>
-  <div class="sold-label">Today Sold</div>
-</button>
-
-     <button class="tile tile-churritos" onclick="addItem('churritos', this)">
-  <h2>Churritos Locos</h2>
-  <p>$8</p>
-  <div class="count" id="churritosSold">0</div>
-  <div class="sold-label">Today Sold</div>
-</button>
-<button class="tile tile-esquite-vaso" onclick="addItem('esquiteVaso', this)">
-  <h2>Esquite en Vaso</h2>
-  <p>$6</p>
-  <div class="count" id="esquiteVasoSold">0</div>
-  <div class="sold-label">Today Sold</div>
-</button>
-      <button class="tile tile-esquite-cheetos" onclick="addItem('esquiteCheetos', this)">
-  <h2>Esquite con Cheetos</h2>
-  <p>$7</p>
-  <div class="count" id="esquiteCheetosSold">0</div>
-  <div class="sold-label">Today Sold</div>
-</button>
-
-      <button class="tile tile-classic-lemonade" onclick="addItem('classicLemonade', this)">
-        <h2>Classic Lemonade</h2>
-        <p>$6</p>
-        <div class="count" id="classicLemonadeSold">0</div>
-        <div class="sold-label">Today Sold</div>
-      </button>
-
-      <button class="tile tile-speciality" onclick="addItem('speciality', this)">
-        <h2>Speciality</h2>
-        <p>$8</p>
-        <div class="count" id="specialitySold">0</div>
-        <div class="sold-label">Today Sold</div>
-      </button>
-
-      <button class="tile tile-flavor-add" onclick="addItem('flavorAdd', this)">
-        <h2>Flavor Add</h2>
-        <p>$1</p>
-        <div class="count" id="flavorAddSold">0</div>
-        <div class="sold-label">Today Sold</div>
-      </button>
-    </section>
-
-    <section class="card current-order-card">
-      <div class="card-header-row">
-        <h2>Current Order</h2>
-        <button class="small-btn dark-btn" onclick="undoLastTap()">Undo Last Tap</button>
+      <div class="nav-row">
+        <button type="button" class="nav-btn" onclick="goHome()">Main Screen</button>
+        <button type="button" class="nav-btn" onclick="goHistory()">Saved Previous Days</button>
       </div>
 
-      <div id="orderList" class="order-list"></div>
-
-      <div class="order-totals">
-        <div class="order-total-line">
-          <span>Items in Order</span>
-          <strong id="orderItems">0</strong>
+      <section class="summary-grid">
+        <div class="card">
+          <h3>Total Sales</h3>
+          <div class="big-number money" id="dayTotal">$0.00</div>
         </div>
-        <div class="order-total-line big-line">
-          <span>Subtotal</span>
-          <strong id="orderSubtotal">$0.00</strong>
+        <div class="card">
+          <h3>Cash</h3>
+          <div class="big-number money" id="cashTotal">$0.00</div>
         </div>
-      </div>
+        <div class="card">
+          <h3>Cash App</h3>
+          <div class="big-number money" id="cashAppTotal">$0.00</div>
+        </div>
+        <div class="card">
+          <h3>Apple Pay</h3>
+          <div class="big-number money" id="applePayTotal">$0.00</div>
+        </div>
+      </section>
 
-      <div class="checkout-row">
-        <button class="pay-btn cash-btn" onclick="checkoutOrder('cash')">Pay Cash</button>
-        <button class="pay-btn digital-btn" onclick="checkoutOrder('digital')">Pay Digital</button>
-      </div>
+      <section class="summary-grid">
+        <div class="card">
+          <h3>Square</h3>
+          <div class="big-number money" id="squareTotal">$0.00</div>
+        </div>
+        <div class="card">
+          <h3>Top Seller</h3>
+          <div class="big-number small-number" id="topSeller">—</div>
+        </div>
+        <div class="card">
+          <h3>Weekly Total</h3>
+          <div class="big-number money" id="weekTotal">$0.00</div>
+        </div>
+        <div class="card">
+          <h3>Weekly Top Seller</h3>
+          <div class="big-number small-number" id="weekTopSeller">—</div>
+        </div>
+      </section>
 
-      <div class="checkout-row">
-        <button class="pay-btn split-btn" onclick="splitPaymentHalf()">Split 50/50</button>
-        <button class="pay-btn split-custom-btn" onclick="splitPaymentCustom()">Split Custom</button>
-      </div>
+      <section class="layout">
+        <div class="left-column">
+          <div class="card">
+            <div class="card-head">
+              <h2>Tap Box Menu</h2>
+              <span id="editingNotice" class="editing-badge hidden">Editing sale item</span>
+            </div>
 
-      <div class="checkout-row">
-        <button class="pay-btn cancel-btn" onclick="clearCurrentOrder()">Clear Order</button>
-      </div>
+            <div id="boxMenu" class="box-menu-grid"></div>
+          </div>
+
+          <div class="card">
+            <h2>Build Item</h2>
+            <div id="builderStage" class="builder-stage">
+              <p>Tap a box to begin.</p>
+            </div>
+
+            <div class="builder-actions">
+              <button type="button" class="secondary-btn" onclick="clearBuilder()">Clear Builder</button>
+              <button type="button" class="primary-btn" onclick="addBuiltItemToDraft()">Add / Update Item</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Review Item</h2>
+            <div id="reviewCard" class="review-card">
+              <p>No item being built yet.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="right-column">
+          <div class="card">
+            <div class="card-head">
+              <h2>Current Draft Sale</h2>
+              <button type="button" class="secondary-btn small-btn" onclick="clearDraft()">Clear Draft</button>
+            </div>
+
+            <div id="draftOrderList" class="order-list">
+              <p>No items in draft yet.</p>
+            </div>
+
+            <div class="totals-box">
+              <div class="line total-line"><span>Draft Total</span><strong id="draftTotal">$0.00</strong></div>
+            </div>
+
+            <div class="builder-actions">
+              <button type="button" class="primary-btn" onclick="addDraftToToday()">Add Sale to Today</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Today’s Sales</h2>
+        <div id="todaySalesList" class="live-list">
+          <p>No sales yet.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Item Counts Today</h2>
+        <div id="itemCountsBox" class="review-card">
+          <p>No sales yet.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Day Actions</h2>
+          <div class="inline-buttons">
+            <button type="button" class="primary-btn small-wide-btn" onclick="saveDay()">Save Day</button>
+            <button type="button" class="secondary-btn small-wide-btn" onclick="resetDay()">Reset Day</button>
+          </div>
+        </div>
+      </section>
     </section>
 
-    <section class="summary-grid">
-      <div class="card summary-card">
-        <h2>Today Sales</h2>
-        <div class="big-number" id="todaySales">$0.00</div>
+    <section id="historyScreen" class="hidden">
+      <header class="hero">
+        <h1>Saved Previous Days</h1>
+        <p class="subtitle">Tap a day to see sales + stats</p>
+      </header>
+
+      <div class="nav-row">
+        <button type="button" class="nav-btn" onclick="goHome()">Back to Main</button>
       </div>
 
-      <div class="card summary-card">
-        <h2>Cash</h2>
-        <div class="big-number" id="cashTotal">$0.00</div>
-      </div>
+      <section class="layout history-layout">
+        <div class="card">
+          <h2>Saved Days</h2>
+          <div id="historyDaysList" class="history-days-list">
+            <p>No saved days yet.</p>
+          </div>
+        </div>
 
-      <div class="card summary-card">
-        <h2>Digital</h2>
-        <div class="big-number" id="digitalTotal">$0.00</div>
-      </div>
-
-      <div class="card summary-card">
-        <h2>Today Items</h2>
-        <div class="big-number" id="todayItems">0</div>
-      </div>
-    </section>
-
-    <section class="summary-grid">
-      <div class="card summary-card">
-        <h2>This Week</h2>
-        <div class="big-number" id="weeklySales">$0.00</div>
-      </div>
-
-      <div class="card summary-card">
-        <h2>Weekly Top Seller</h2>
-        <div class="top-seller" id="weeklyTopSeller">None yet</div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Today's Date</h2>
-      <p id="todayDate"></p>
-      <div class="save-row">
-        <button class="save-btn" onclick="saveDay()">Save Day</button>
-        <button class="reset-btn" onclick="resetDay()">Reset Day</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Previous Days</h2>
-      <div id="historyList" class="history-list"></div>
+        <div class="card">
+          <h2 id="historyDetailTitle">Day Details</h2>
+          <div id="historyDetail" class="history-detail">
+            <p>Select a day.</p>
+          </div>
+        </div>
+      </section>
     </section>
   </div>
 
-  <div id="confettiContainer" class="confetti-container"></div>
-
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>
