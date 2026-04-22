@@ -192,14 +192,11 @@ function renderPopupOptions(options, onChoose) {
       ${option.sub ? `<div class="popup-option-sub">${option.sub}</div>` : ""}
     `;
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".popup-option").forEach(el => el.classList.remove("active"));
-      btn.classList.add("active");
       onChoose(option, index);
     });
     wrap.appendChild(btn);
   });
 }
-
 function setPopupPayment(method) {
   popupState.payment = method;
   document.getElementById("popupCashBtn").classList.toggle("active", method === "cash");
@@ -235,17 +232,41 @@ function openSimpleSale(owner, name, amount, sub = "") {
 
 function openFlavorLemonade() {
   popupState.owner = "lemonade";
-  openPopup("Flavor Lemonade", "Choose one flavor.");
+  openPopup("Flavor Lemonade", "Tap every flavor used. Each one adds $1.");
+
+  const selectedFlavors = [];
 
   renderPopupOptions(
     LEMONADE_FLAVORS.map(flavor => ({
-      name: `${flavor} • $7`,
-      sub: "Base $6 + flavor $1"
+      name: flavor,
+      sub: "Adds $1"
     })),
-    (choice) => {
-      const name = choice.name.replace(" • $7", "");
-      popupState.selectedLabel = `Flavor Lemonade - ${name}`;
-      popupState.selectedAmount = 7;
+    (choice, index) => {
+      const optionButtons = document.querySelectorAll(".popup-option");
+      const clickedBtn = optionButtons[index];
+      const flavorName = choice.name;
+
+      const alreadySelected = selectedFlavors.includes(flavorName);
+
+      if (alreadySelected) {
+        const removeIndex = selectedFlavors.indexOf(flavorName);
+        selectedFlavors.splice(removeIndex, 1);
+        clickedBtn.classList.remove("active");
+      } else {
+        selectedFlavors.push(flavorName);
+        clickedBtn.classList.add("active");
+      }
+
+      const total = 6 + selectedFlavors.length;
+
+      if (selectedFlavors.length === 0) {
+        popupState.selectedLabel = "";
+        popupState.selectedAmount = 0;
+      } else {
+        popupState.selectedLabel = `Flavor Lemonade - ${selectedFlavors.join(", ")}`;
+        popupState.selectedAmount = total;
+      }
+
       updatePopupSummary();
     }
   );
