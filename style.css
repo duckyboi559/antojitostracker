@@ -405,7 +405,7 @@ h4 {
 
 .top-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-bottom: 16px;
 }
@@ -416,34 +416,30 @@ h4 {
   min-height: 76px;
   border: none;
   border-radius: 24px;
-  color: white;
   font-weight: 900;
   cursor: pointer;
   box-shadow: 0 12px 20px rgba(149, 224, 0, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: inherit;
 }
 
 .save-day-btn {
   background: linear-gradient(180deg, #f864a9, #de2c86);
-  font-family: "Lobster", cursive;
-  font-size: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
+  color: white;
+  font-size: 1.3rem;
 }
 
 .view-days-btn {
   background: linear-gradient(180deg, #c8f065, #97dc0f);
   color: #5b2340;
-  font-size: 1.15rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  font-size: 1.05rem;
 }
 
 .save-icon {
-  font-size: 1.8rem;
+  font-size: 1.2rem;
   font-family: initial;
 }
 
