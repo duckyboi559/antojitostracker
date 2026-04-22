@@ -126,22 +126,22 @@
       </div>
     </section>
 
-<div class="top-actions">
-  <button id="saveDayBtn" class="save-day-btn" type="button">
-    <span class="save-icon">💾</span>
-    <span>Save Day</span>
-  </button>
+    <div class="top-actions">
+      <button id="saveDayBtn" class="save-day-btn" type="button">
+        <span class="save-icon">💾</span>
+        <span>Save Day</span>
+      </button>
 
-  <button id="viewDaysBtn" class="view-days-btn" type="button">
-    <span>📖</span>
-    <span>View Previous Days</span>
-  </button>
+      <button id="viewDaysBtn" class="view-days-btn" type="button">
+        <span>📖</span>
+        <span>View Previous Days</span>
+      </button>
 
-  <button id="undoBtn" class="view-days-btn" type="button">
-    <span>↩</span>
-    <span>Undo Last</span>
-  </button>
-</div>
+      <button id="undoBtn" class="view-days-btn" type="button">
+        <span>↩</span>
+        <span>Undo Last</span>
+      </button>
+    </div>
 
     <section class="glass-card history-card">
       <div class="history-top">
@@ -153,11 +153,11 @@
         <button id="refreshHistoryBtn" class="refresh-btn" type="button">⟳ Refresh</button>
       </div>
 
-      <div class="history-list" id="historyList"></div>
+      <div id="historyList" class="history-list"></div>
     </section>
   </main>
 
-  <!-- ADD SALE POPUP -->
+  <!-- POPUP -->
   <div id="popupOverlay" class="popup-overlay hidden">
     <div class="popup-card">
       <div class="popup-head">
@@ -176,7 +176,7 @@
         </div>
       </div>
 
-      <div class="popup-summary" id="popupSummary">Nothing selected yet.</div>
+      <div id="popupSummary" class="popup-summary">Nothing selected yet.</div>
 
       <div class="popup-actions">
         <button id="popupDoneBtn" class="popup-done-btn" type="button">Add to Total</button>
@@ -191,7 +191,6 @@
         <h4>All Previous Days</h4>
         <button id="closeDaysBtn" class="close-popup" type="button">✕</button>
       </div>
-      
       <div id="allDaysList" class="full-days-list"></div>
     </div>
   </div>
