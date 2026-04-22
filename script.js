@@ -70,6 +70,7 @@ const lemonadeMenuButtons = [
 ];
 
 const state = {
+  lastEntry: null
   date: "",
   snacksTotal: 0,
   lemonadeTotal: 0,
@@ -308,17 +309,46 @@ function confirmPopupSale() {
     state.digitalTotal += popupState.selectedAmount;
   }
 
-  state.entries.push({
-    owner: popupState.owner === "snacks" ? "Snacks" : "Lemonades",
-    item: popupState.selectedLabel,
-    amount: Number(popupState.selectedAmount.toFixed(2)),
-    payment: popupState.payment
-  });
+  const entry = {
+  owner: popupState.owner === "snacks" ? "Snacks" : "Lemonades",
+  item: popupState.selectedLabel,
+  amount: Number(popupState.selectedAmount.toFixed(2)),
+  payment: popupState.payment
+};
+
+state.entries.push(entry);
+state.lastEntry = entry;
 
   updateTotalsUI();
   closePopup();
 }
 
+
+function undoLast() {
+  if (!state.lastEntry) {
+    alert("Nothing to undo.");
+    return;
+  }
+
+  const last = state.lastEntry;
+
+  if (last.owner === "Snacks") {
+    state.snacksTotal -= last.amount;
+  } else {
+    state.lemonadeTotal -= last.amount;
+  }
+
+  if (last.payment === "cash") {
+    state.cashTotal -= last.amount;
+  } else {
+    state.digitalTotal -= last.amount;
+  }
+
+  state.entries.pop();
+  state.lastEntry = null;
+
+  updateTotalsUI();
+}
 function updateTotalsUI() {
   const combined = state.snacksTotal + state.lemonadeTotal;
   state.tips = Number(document.getElementById("tipsInput").value || 0);
@@ -558,7 +588,7 @@ function bindEvents() {
   document.getElementById("tipsInput").addEventListener("input", () => {
     updateTotalsUI();
   });
-
+  document.getElementById("undoBtn").addEventListener("click", undoLast);
   document.getElementById("saveDayBtn").addEventListener("click", saveDay);
   document.getElementById("viewDaysBtn").addEventListener("click", openAllDays);
   document.getElementById("refreshHistoryBtn").addEventListener("click", loadHistory);
