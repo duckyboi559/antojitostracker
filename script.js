@@ -70,7 +70,7 @@ const lemonadeMenuButtons = [
 ];
 
 const state = {
-  lastEntry: null
+  lastEntry: null,
   date: "",
   snacksTotal: 0,
   lemonadeTotal: 0,
