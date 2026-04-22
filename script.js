@@ -2,11 +2,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/fireba
 import {
   getDatabase,
   ref,
-  push,
   set,
-  remove,
-  onValue,
-  runTransaction
+  onValue
 } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -22,7 +19,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const CLASSIC_FLAVORS = [
+// SNACKS
+const SNACK_ITEMS = [
+  { id: "chip_locos", name: "Chip Locos", emoji: "🌶️", price: 8, sub: "Pepino, jicama, cueritos, mango, cacahuates, chaca chaca, chamoy, limon, tajin" },
+  { id: "chip_esquite", name: "Chip Esquite", emoji: "🌽", price: 9, sub: "Elote, mayonesa, mantequilla, queso" },
+  { id: "maruchan_preparada", name: "Maruchan Preparada", emoji: "🍜", price: 12, sub: "Chips, elote, mayonesa, mantequilla, queso" },
+  { id: "churritos_locos", name: "Churritos Locos", emoji: "🔥", price: 8, sub: "Pepino, jicama, cueritos, cacahuates, chaca chaca, clamato, chamoy, limon, tajin" },
+  { id: "esquite_vaso", name: "Esquite Vaso", emoji: "🥣", price: 6, sub: "Regular" },
+  { id: "esquite_cheetos", name: "Esquite Con Cheetos", emoji: "🧀", price: 7, sub: "With Cheetos" }
+];
+
+// LEMONADES
+const LEMONADE_FLAVORS = [
   "Strawberry",
   "Watermelon",
   "Mango",
@@ -38,733 +46,535 @@ const CLASSIC_FLAVORS = [
   "Green Apple"
 ];
 
-const LEMONADE_ADDONS = [
-  "Candy",
-  "Cueritos",
-  "Cacahuates",
-  ...CLASSIC_FLAVORS
+const SPECIALTY_LEMONADES = [
+  { name: "Mango Madness", sub: "Mango • Chamoy • Chamoy Rim • Gummies • Tamarindo Stick" },
+  { name: "Blue Beam", sub: "Blue Raspberry • Chamoy Rim • Gummies • Tamarindo Stick" },
+  { name: "Orange Creamsicle", sub: "Orange • Vanilla • Sweet Cream • Gummies" },
+  { name: "Electric Island", sub: "Pineapple • Blue Raspberry" },
+  { name: "Peachy Paradise", sub: "Peach • Coconut • Strawberry" },
+  { name: "Strawberry Smash", sub: "Strawberry • Fresh Strawberries" },
+  { name: "Strawberries & Cream", sub: "Strawberry • Fresh Strawberries • Sweet Cream" },
+  { name: "Pink Pines", sub: "Strawberry • Pineapple" }
 ];
 
-const SPECIALTIES = {
-  "Mango Madness": ["Mango", "Chamoy", "Tajin", "Candy"],
-  "Blue Beam": ["Blue Raspberry", "Candy"],
-  "Orange Creamsicle": ["Orange", "Cream"],
-  "Electric Island": ["Blue Raspberry", "Coconut", "Candy"],
-  "Peachy Paradise": ["Peach", "Candy"],
-  "Strawberry Smash": ["Strawberry", "Candy"],
-  "Strawberries & Cream": ["Strawberry", "Cream"],
-  "Pink Pines": ["Pineapple", "Strawberry", "Candy"]
-};
+const snackMenuButtons = SNACK_ITEMS.map(item => ({
+  id: item.id,
+  name: item.name,
+  emoji: item.emoji
+}));
 
-const SNACKS = {
-  "Chip Locos": {
-    price: 8,
-    ingredients: ["Pepino", "Jicama", "Cueritos", "Mango", "Cacahuates", "Chaca Chaca", "Chamoy", "Limon", "Tajin"]
-  },
-  "Chip Esquite": {
-    price: 9,
-    ingredients: ["Elote", "Mayonesa", "Mantequilla", "Queso"]
-  },
-  "Maruchan Preparada": {
-    price: 12,
-    ingredients: ["Chips", "Elote", "Mayonesa", "Mantequilla", "Queso"]
-  },
-  "Churritos Locos": {
-    price: 8,
-    ingredients: ["Pepino", "Jicama", "Cueritos", "Cacahuates", "Chaca Chaca", "Clamato", "Chamoy", "Limon", "Tajin"]
-  },
-  "Esquite Vaso": {
-    price: 6,
-    ingredients: []
-  },
-  "Esquite con Cheetos": {
-    price: 7,
-    ingredients: []
-  }
-};
-
-const MENU_BOXES = [
-  { name: "Classic Lemonade", priceLabel: "$6", image: "images/lemonade-box.png", soldKey: "Classic Lemonade" },
-  { name: "Specialty Lemonade", priceLabel: "$8", image: "images/lemonade-box.png", soldKey: "Specialty Lemonade" },
-  { name: "Chip Locos", priceLabel: "$8", image: "images/chip-locos.png", soldKey: "Chip Locos" },
-  { name: "Chip Esquite", priceLabel: "$9", image: "images/chip-esquite.png", soldKey: "Chip Esquite" },
-  { name: "Maruchan Preparada", priceLabel: "$12", image: "images/maruchan-preparada.png", soldKey: "Maruchan Preparada" },
-  { name: "Churritos Locos", priceLabel: "$8", image: "images/churritos-locos.png", soldKey: "Churritos Locos" },
-  { name: "Esquite Vaso", priceLabel: "$6", image: "images/esquite-vaso.png", soldKey: "Esquite Vaso" },
-  { name: "Esquite con Cheetos", priceLabel: "$7", image: "images/esquite-con-cheetos.png", soldKey: "Esquite con Cheetos" }
+const lemonadeMenuButtons = [
+  { id: "classic", name: "Classic Lemonade", emoji: "🍋" },
+  { id: "flavored", name: "Flavor Lemonade", emoji: "🧃" },
+  { id: "specialty", name: "Specialty Lemonade", emoji: "⭐" }
 ];
 
-let trackerState = {
-  sales: {},
-  days: {}
+const state = {
+  date: "",
+  snacksTotal: 0,
+  lemonadeTotal: 0,
+  cashTotal: 0,
+  digitalTotal: 0,
+  tips: 0,
+  entries: []
 };
 
-let draftItems = [];
-let builder = { data: {} };
-let editingDraftIndex = null;
-let selectedHistoryDay = null;
+const popupState = {
+  owner: "",
+  payment: "cash",
+  selectedLabel: "",
+  selectedAmount: 0
+};
 
-function formatMoney(value) {
+let historyCache = {};
+let historyBound = false;
+
+function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
-function escapeForSingleQuote(str) {
-  return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+function todayLocalValue() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60000);
+  return local.toISOString().split("T")[0];
 }
 
-function nowLabel() {
-  return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+function formatDateForDisplay(dateString) {
+  if (!dateString) return "";
+  const [year, month, day] = dateString.split("-");
+  return `${month}/${day}/${year}`;
 }
 
-function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function setDefaultDate() {
+  const datePicker = document.getElementById("datePicker");
+  if (!datePicker.value) {
+    datePicker.value = todayLocalValue();
+  }
+  state.date = datePicker.value;
 }
 
-function todayLabel() {
-  return new Date().toLocaleDateString();
-}
+function renderMenus() {
+  const snacksMenuList = document.getElementById("snacksMenuList");
+  const lemonadeMenuList = document.getElementById("lemonadeMenuList");
 
-function clone(obj) {
-  return JSON.parse(JSON.stringify(obj));
-}
+  snacksMenuList.innerHTML = "";
+  lemonadeMenuList.innerHTML = "";
 
-function getWeekStart(date = new Date()) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day;
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function topLabel(counts) {
-  let best = "—";
-  let bestCount = 0;
-
-  Object.entries(counts || {}).forEach(([name, count]) => {
-    if (count > bestCount) {
-      best = `${name} (${count})`;
-      bestCount = count;
-    }
+  snackMenuButtons.forEach(item => {
+    snacksMenuList.appendChild(buildMenuRow(item, "snacks"));
   });
 
-  return bestCount ? best : "—";
-}
-
-function totalsFromSales(salesObject) {
-  let cash = 0;
-  let cashApp = 0;
-  let applePay = 0;
-  let square = 0;
-
-  Object.values(salesObject || {}).forEach(sale => {
-    if (sale.payment?.type === "cash") {
-      cash += Number(sale.payment.total || 0);
-    }
-    if (sale.payment?.type === "digital") {
-      if (sale.payment.method === "Cash App") cashApp += Number(sale.payment.total || 0);
-      if (sale.payment.method === "Apple Pay") applePay += Number(sale.payment.total || 0);
-      if (sale.payment.method === "Square") square += Number(sale.payment.total || 0);
-    }
-    if (sale.payment?.type === "split") {
-      cash += Number(sale.payment.cashAmount || 0);
-      if (sale.payment.digitalMethod === "Cash App") cashApp += Number(sale.payment.digitalAmount || 0);
-      if (sale.payment.digitalMethod === "Apple Pay") applePay += Number(sale.payment.digitalAmount || 0);
-      if (sale.payment.digitalMethod === "Square") square += Number(sale.payment.digitalAmount || 0);
-    }
+  lemonadeMenuButtons.forEach(item => {
+    lemonadeMenuList.appendChild(buildMenuRow(item, "lemonade"));
   });
-
-  return {
-    cash,
-    cashApp,
-    applePay,
-    square,
-    dayTotal: cash + cashApp + applePay + square
-  };
 }
 
-function getCountsFromSales(salesObject) {
-  const itemCounts = {};
-  const specialtyCounts = {};
+function buildMenuRow(item, owner) {
+  const row = document.createElement("div");
+  row.className = "menu-row";
 
-  Object.values(salesObject || {}).forEach(sale => {
-    (sale.items || []).forEach(item => {
-      const qty = Number(item.quantity || 0);
-      itemCounts[item.name] = (itemCounts[item.name] || 0) + qty;
-
-      if (item.specialtyName) {
-        specialtyCounts[item.specialtyName] = (specialtyCounts[item.specialtyName] || 0) + qty;
-      }
-    });
-  });
-
-  return { itemCounts, specialtyCounts };
-}
-
-function choiceButtons(items, key, isMulti = false) {
-  return `
-    <div class="choice-grid">
-      ${items.map(item => {
-        const selected = isMulti
-          ? (Array.isArray(builder.data[key]) && builder.data[key].includes(item))
-          : builder.data[key] === item;
-
-        const safe = escapeForSingleQuote(item);
-        const cls = selected
-          ? `choice-btn selected ${isMulti ? "multi-selected" : ""}`
-          : "choice-btn";
-
-        const click = isMulti
-          ? `toggleBuilderArray('${key}', '${safe}')`
-          : `setBuilderValue('${key}', '${safe}')`;
-
-        return `<button type="button" class="${cls}" onclick="${click}">${item}</button>`;
-      }).join("")}
+  row.innerHTML = `
+    <div class="menu-left">
+      <div class="menu-icon">${item.emoji}</div>
+      <div class="menu-name">${item.name}</div>
     </div>
+    <button class="menu-open-btn" type="button">Open</button>
   `;
+
+  row.querySelector(".menu-open-btn").addEventListener("click", () => {
+    handleMenuOpen(owner, item.id);
+  });
+
+  return row;
 }
 
-function renderBoxMenu() {
-  const { itemCounts } = getCountsFromSales(trackerState.sales);
-  const box = document.getElementById("boxMenu");
-
-  box.innerHTML = MENU_BOXES.map(item => `
-    <button type="button" class="menu-box" style="background-image:url('${item.image}')" onclick="selectMenuBox('${escapeForSingleQuote(item.name)}')">
-      <div class="menu-box-content">
-        <h3>${item.name}</h3>
-        <p>${item.priceLabel}</p>
-        <p>Today Sold: ${itemCounts[item.soldKey] || 0}</p>
-      </div>
-    </button>
-  `).join("");
-}
-
-window.selectMenuBox = function (name) {
-  builder = { data: { itemType: name } };
-  editingDraftIndex = null;
-  renderBuilder();
-  renderReview();
-};
-
-window.goHome = function () {
-  history.pushState({}, "", window.location.pathname);
-  renderScreen();
-};
-
-window.goHistory = function () {
-  history.pushState({}, "", `${window.location.pathname}?view=history`);
-  renderScreen();
-};
-
-window.selectHistoryDay = function (dayKey) {
-  history.pushState({}, "", `${window.location.pathname}?view=history&day=${encodeURIComponent(dayKey)}`);
-  renderScreen();
-};
-
-window.addEventListener("popstate", renderScreen);
-
-window.clearBuilder = function () {
-  builder = { data: {} };
-  editingDraftIndex = null;
-  renderBuilder();
-  renderReview();
-};
-
-window.setBuilderValue = function (key, value) {
-  builder.data[key] = value;
-  renderBuilder();
-  renderReview();
-};
-
-window.toggleBuilderArray = function (key, value) {
-  if (!Array.isArray(builder.data[key])) builder.data[key] = [];
-  const arr = builder.data[key];
-  const idx = arr.indexOf(value);
-  if (idx >= 0) arr.splice(idx, 1);
-  else arr.push(value);
-  renderBuilder();
-  renderReview();
-};
-
-function renderBuilder() {
-  const el = document.getElementById("builderStage");
-  if (!el) return;
-
-  const type = builder.data.itemType;
-
-  if (!type) {
-    el.innerHTML = `<p>Tap a box to begin.</p>`;
+function handleMenuOpen(owner, id) {
+  if (owner === "snacks") {
+    const snack = SNACK_ITEMS.find(item => item.id === id);
+    if (snack) openSimpleSale("snacks", snack.name, snack.price, snack.sub);
     return;
   }
 
-  let html = `<h3>${type}</h3>`;
+  if (id === "classic") openSimpleSale("lemonade", "Classic Lemonade", 6, "Regular classic lemonade");
+  if (id === "flavored") openFlavorLemonade();
+  if (id === "specialty") openSpecialtyLemonade();
+}
 
-  if (type === "Classic Lemonade") {
-    html += `
-      <h4>1. Quantity</h4>
-      ${choiceButtons(["1", "2", "3", "4", "5"], "quantity")}
+function openPopup(title, stepTitle = "") {
+  document.getElementById("popupTitle").textContent = title;
+  document.getElementById("popupStepTitle").textContent = stepTitle;
+  document.getElementById("popupOptions").innerHTML = "";
+  document.getElementById("popupOverlay").classList.remove("hidden");
+
+  popupState.payment = "cash";
+  popupState.selectedLabel = "";
+  popupState.selectedAmount = 0;
+
+  setPopupPayment("cash");
+  updatePopupSummary();
+}
+
+function closePopup() {
+  document.getElementById("popupOverlay").classList.add("hidden");
+}
+
+function renderPopupOptions(options, onChoose) {
+  const wrap = document.getElementById("popupOptions");
+  wrap.innerHTML = "";
+
+  options.forEach((option, index) => {
+    const btn = document.createElement("button");
+    btn.className = "popup-option";
+    btn.type = "button";
+    btn.innerHTML = `
+      <div class="popup-option-title">${option.name}</div>
+      ${option.sub ? `<div class="popup-option-sub">${option.sub}</div>` : ""}
     `;
-    if (builder.data.quantity) {
-      html += `
-        <h4>2. Add On +$1</h4>
-        ${choiceButtons(LEMONADE_ADDONS, "addons", true)}
-        <p class="helper">Tap as many add-ons as needed. Each selected add-on adds $1.</p>
-      `;
-    }
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".popup-option").forEach(el => el.classList.remove("active"));
+      btn.classList.add("active");
+      onChoose(option, index);
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function setPopupPayment(method) {
+  popupState.payment = method;
+  document.getElementById("popupCashBtn").classList.toggle("active", method === "cash");
+  document.getElementById("popupDigitalBtn").classList.toggle("active", method === "digital");
+}
+
+function updatePopupSummary() {
+  const box = document.getElementById("popupSummary");
+
+  if (!popupState.selectedLabel) {
+    box.textContent = "Nothing selected yet.";
+    return;
   }
 
-  if (type === "Specialty Lemonade") {
-    html += `
-      <h4>1. Quantity</h4>
-      ${choiceButtons(["1", "2", "3", "4", "5"], "quantity")}
+  box.textContent = `${popupState.selectedLabel} • ${money(popupState.selectedAmount)} • ${popupState.payment}`;
+}
+
+function openSimpleSale(owner, name, amount, sub = "") {
+  popupState.owner = owner;
+  openPopup(name, "Choose payment, then tap Add to Total.");
+
+  popupState.selectedLabel = name;
+  popupState.selectedAmount = amount;
+  updatePopupSummary();
+
+  document.getElementById("popupOptions").innerHTML = `
+    <button class="popup-option active" type="button">
+      <div class="popup-option-title">${name} • ${money(amount)}</div>
+      ${sub ? `<div class="popup-option-sub">${sub}</div>` : ""}
+    </button>
+  `;
+}
+
+function openFlavorLemonade() {
+  popupState.owner = "lemonade";
+  openPopup("Flavor Lemonade", "Choose one flavor.");
+
+  renderPopupOptions(
+    LEMONADE_FLAVORS.map(flavor => ({
+      name: `${flavor} • $7`,
+      sub: "Base $6 + flavor $1"
+    })),
+    (choice) => {
+      const name = choice.name.replace(" • $7", "");
+      popupState.selectedLabel = `Flavor Lemonade - ${name}`;
+      popupState.selectedAmount = 7;
+      updatePopupSummary();
+    }
+  );
+}
+
+function openSpecialtyLemonade() {
+  popupState.owner = "lemonade";
+  openPopup("Specialty Lemonade", "Choose a specialty.");
+
+  renderPopupOptions(
+    SPECIALTY_LEMONADES.map(item => ({
+      name: `${item.name} • $8`,
+      sub: item.sub
+    })),
+    (choice) => {
+      const name = choice.name.replace(" • $8", "");
+      popupState.selectedLabel = `Specialty Lemonade - ${name}`;
+      popupState.selectedAmount = 8;
+      updatePopupSummary();
+    }
+  );
+}
+
+function confirmPopupSale() {
+  if (!popupState.owner || !popupState.selectedAmount) {
+    alert("Choose an item first.");
+    return;
+  }
+
+  if (popupState.owner === "snacks") {
+    state.snacksTotal += popupState.selectedAmount;
+  } else {
+    state.lemonadeTotal += popupState.selectedAmount;
+  }
+
+  if (popupState.payment === "cash") {
+    state.cashTotal += popupState.selectedAmount;
+  } else {
+    state.digitalTotal += popupState.selectedAmount;
+  }
+
+  state.entries.push({
+    owner: popupState.owner === "snacks" ? "Snacks" : "Lemonades",
+    item: popupState.selectedLabel,
+    amount: Number(popupState.selectedAmount.toFixed(2)),
+    payment: popupState.payment
+  });
+
+  updateTotalsUI();
+  closePopup();
+}
+
+function updateTotalsUI() {
+  const combined = state.snacksTotal + state.lemonadeTotal;
+  state.tips = Number(document.getElementById("tipsInput").value || 0);
+
+  document.getElementById("snacksTotal").textContent = money(state.snacksTotal);
+  document.getElementById("lemonadeTotal").textContent = money(state.lemonadeTotal);
+  document.getElementById("cashTotal").textContent = money(state.cashTotal);
+  document.getElementById("digitalTotal").textContent = money(state.digitalTotal);
+  document.getElementById("tipsTotal").textContent = money(state.tips);
+  document.getElementById("summarySnacks").textContent = money(state.snacksTotal);
+  document.getElementById("summaryLemonade").textContent = money(state.lemonadeTotal);
+  document.getElementById("combinedTotal").textContent = money(combined);
+  document.getElementById("summaryTips").textContent = money(state.tips);
+}
+
+async function saveDay() {
+  const date = document.getElementById("datePicker").value;
+
+  if (!date) {
+    alert("Please select a date first.");
+    return;
+  }
+
+  state.date = date;
+  state.tips = Number(document.getElementById("tipsInput").value || 0);
+
+  const payload = {
+    date,
+    createdAt: Date.now(),
+    snacksTotal: Number(state.snacksTotal.toFixed(2)),
+    lemonadeTotal: Number(state.lemonadeTotal.toFixed(2)),
+    combinedTotal: Number((state.snacksTotal + state.lemonadeTotal).toFixed(2)),
+    cashTotal: Number(state.cashTotal.toFixed(2)),
+    digitalTotal: Number(state.digitalTotal.toFixed(2)),
+    tips: Number(state.tips.toFixed(2)),
+    entries: state.entries
+  };
+
+  try {
+    await set(ref(db, `astrosnaxxDailySales/${date}`), payload);
+    alert("Day saved.");
+  } catch (error) {
+    console.error(error);
+    alert("Could not save the day. Check your Firebase setup.");
+  }
+}
+
+function renderHistoryRows(data) {
+  const historyList = document.getElementById("historyList");
+  const rows = Object.values(data || {}).sort((a, b) => {
+    if ((a?.date || "") < (b?.date || "")) return 1;
+    if ((a?.date || "") > (b?.date || "")) return -1;
+    return 0;
+  });
+
+  historyList.innerHTML = "";
+
+  if (!rows.length) {
+    historyList.innerHTML = `
+      <div class="history-row">
+        <div class="history-date">No saved days yet.</div>
+      </div>
     `;
-    if (builder.data.quantity) {
-      html += `
-        <h4>2. Choose Specialty</h4>
-        ${choiceButtons(Object.keys(SPECIALTIES), "specialtyDrink")}
+    return;
+  }
+
+  rows.slice(0, 5).forEach(day => {
+    const row = buildDayRow(day);
+    historyList.appendChild(row);
+  });
+}
+
+function buildDayRow(day) {
+  const row = document.createElement("div");
+  row.className = "day-list-row";
+
+  row.innerHTML = `
+    <div class="history-date">
+      <span>📅</span>
+      <span>${formatDateForDisplay(day.date)}</span>
+    </div>
+
+    <div class="history-stat snacks">
+      <div class="label">Snacks</div>
+      <div class="value">${money(day.snacksTotal)}</div>
+    </div>
+
+    <div class="history-stat lemonade">
+      <div class="label">Lemonades</div>
+      <div class="value">${money(day.lemonadeTotal)}</div>
+    </div>
+
+    <div class="history-stat cash">
+      <div class="label">Cash</div>
+      <div class="value">${money(day.cashTotal)}</div>
+    </div>
+
+    <div class="history-stat digital">
+      <div class="label">Digital</div>
+      <div class="value">${money(day.digitalTotal)}</div>
+    </div>
+
+    <div class="history-stat tips">
+      <div class="label">Tips</div>
+      <div class="value">${money(day.tips)}</div>
+    </div>
+
+    <div class="history-arrow">›</div>
+  `;
+
+  row.addEventListener("click", () => openDayDetails(day));
+  return row;
+}
+
+function renderAllDaysList() {
+  const list = document.getElementById("allDaysList");
+  const rows = Object.values(historyCache || {}).sort((a, b) => {
+    if ((a?.date || "") < (b?.date || "")) return 1;
+    if ((a?.date || "") > (b?.date || "")) return -1;
+    return 0;
+  });
+
+  list.innerHTML = "";
+
+  if (!rows.length) {
+    list.innerHTML = `<div class="history-row"><div class="history-date">No saved days yet.</div></div>`;
+    return;
+  }
+
+  rows.forEach(day => {
+    list.appendChild(buildDayRow(day));
+  });
+}
+
+function openAllDays() {
+  renderAllDaysList();
+  document.getElementById("daysOverlay").classList.remove("hidden");
+}
+
+function closeAllDays() {
+  document.getElementById("daysOverlay").classList.add("hidden");
+}
+
+function openDayDetails(day) {
+  document.getElementById("detailTitle").textContent = `Day Details - ${formatDateForDisplay(day.date)}`;
+
+  document.getElementById("detailTotals").innerHTML = `
+    <div class="detail-total-box">
+      <div class="small-label">Snacks</div>
+      <div class="value">${money(day.snacksTotal)}</div>
+    </div>
+    <div class="detail-total-box">
+      <div class="small-label">Lemonades</div>
+      <div class="value">${money(day.lemonadeTotal)}</div>
+    </div>
+    <div class="detail-total-box">
+      <div class="small-label">Cash</div>
+      <div class="value">${money(day.cashTotal)}</div>
+    </div>
+    <div class="detail-total-box">
+      <div class="small-label">Digital</div>
+      <div class="value">${money(day.digitalTotal)}</div>
+    </div>
+    <div class="detail-total-box">
+      <div class="small-label">Tips</div>
+      <div class="value">${money(day.tips)}</div>
+    </div>
+  `;
+
+  const entriesWrap = document.getElementById("detailEntries");
+  entriesWrap.innerHTML = "";
+
+  const entries = Array.isArray(day.entries) ? day.entries : [];
+
+  if (!entries.length) {
+    entriesWrap.innerHTML = `<div class="detail-entry"><div class="detail-entry-top">No item details saved for this day.</div></div>`;
+  } else {
+    entries.forEach(entry => {
+      const box = document.createElement("div");
+      box.className = "detail-entry";
+      box.innerHTML = `
+        <div class="detail-entry-top">
+          <span>${entry.owner}</span>
+          <span>${money(entry.amount)}</span>
+        </div>
+        <div class="detail-entry-sub">${entry.item}</div>
+        <div class="detail-entry-sub">Payment: ${entry.payment}</div>
       `;
-      if (builder.data.specialtyDrink) {
-        html += `
-          <h4>Ingredients</h4>
-          <div class="review-card">
-            ${SPECIALTIES[builder.data.specialtyDrink].map(i => `<p>${i}</p>`).join("")}
+      entriesWrap.appendChild(box);
+    });
+  }
+
+  document.getElementById("detailOverlay").classList.remove("hidden");
+}
+
+function closeDayDetails() {
+  document.getElementById("detailOverlay").classList.add("hidden");
+}
+
+function loadHistory() {
+  const historyList = document.getElementById("historyList");
+
+  if (!historyBound) {
+    historyList.innerHTML = `
+      <div class="history-row">
+        <div class="history-date">Loading...</div>
+      </div>
+    `;
+
+    onValue(
+      ref(db, "astrosnaxxDailySales"),
+      (snapshot) => {
+        historyCache = snapshot.val() || {};
+        renderHistoryRows(historyCache);
+      },
+      (error) => {
+        console.error(error);
+        historyList.innerHTML = `
+          <div class="history-row">
+            <div class="history-date">Could not load history.</div>
           </div>
         `;
       }
-    }
-  }
+    );
 
-  if (SNACKS[type]) {
-    html += `
-      <h4>1. Quantity</h4>
-      ${choiceButtons(["1", "2", "3", "4", "5"], "quantity")}
-    `;
-    if (builder.data.quantity && SNACKS[type].ingredients.length) {
-      html += `
-        <h4>Ingredients</h4>
-        <div class="review-card">
-          ${SNACKS[type].ingredients.map(i => `<p>${i}</p>`).join("")}
-        </div>
-      `;
-    }
-  }
-
-  el.innerHTML = html;
-}
-
-function buildPreviewItem() {
-  const d = builder.data;
-  const qty = Number(d.quantity || 0);
-  const type = d.itemType;
-
-  if (!type || !qty) return null;
-
-  if (type === "Classic Lemonade") {
-    const addons = d.addons || [];
-    const addonCount = addons.length;
-    const unit = 6 + addonCount;
-    return {
-      kind: "classicLemonade",
-      name: "Classic Lemonade",
-      quantity: qty,
-      unitPrice: unit,
-      totalPrice: unit * qty,
-      lines: [`Quantity: ${qty}`, ...(addons.length ? [`Add Ons: ${addons.join(", ")}`] : [])]
-    };
-  }
-
-  if (type === "Specialty Lemonade") {
-    if (!d.specialtyDrink) return null;
-    return {
-      kind: "specialtyLemonade",
-      name: d.specialtyDrink,
-      quantity: qty,
-      unitPrice: 8,
-      totalPrice: 8 * qty,
-      lines: [`Quantity: ${qty}`, ...SPECIALTIES[d.specialtyDrink]],
-      specialtyName: d.specialtyDrink
-    };
-  }
-
-  if (SNACKS[type]) {
-    return {
-      kind: type,
-      name: type,
-      quantity: qty,
-      unitPrice: SNACKS[type].price,
-      totalPrice: SNACKS[type].price * qty,
-      lines: [`Quantity: ${qty}`, ...SNACKS[type].ingredients]
-    };
-  }
-
-  return null;
-}
-
-function renderReview() {
-  const card = document.getElementById("reviewCard");
-  const preview = buildPreviewItem();
-
-  if (!preview) {
-    card.innerHTML = `<p>No item being built yet.</p>`;
-    return;
-  }
-
-  card.innerHTML = `
-    <p><strong>${preview.name}</strong></p>
-    ${preview.lines.map(line => `<p>${line}</p>`).join("")}
-    <p><strong>Total:</strong> ${formatMoney(preview.totalPrice)}</p>
-  `;
-}
-
-window.addBuiltItemToDraft = function () {
-  const preview = buildPreviewItem();
-  if (!preview) {
-    alert("Finish building the item first.");
-    return;
-  }
-
-  const itemToStore = {
-    ...preview,
-    builderData: clone(builder.data)
-  };
-
-  if (editingDraftIndex !== null) {
-    draftItems[editingDraftIndex] = itemToStore;
+    historyBound = true;
   } else {
-    draftItems.push(itemToStore);
+    renderHistoryRows(historyCache);
   }
-
-  editingDraftIndex = null;
-  builder = { data: {} };
-  renderBuilder();
-  renderReview();
-  renderDraft();
-};
-
-window.editDraftItem = function (index) {
-  const item = draftItems[index];
-  if (!item) return;
-  builder = { data: clone(item.builderData) };
-  editingDraftIndex = index;
-  renderBuilder();
-  renderReview();
-};
-
-window.removeDraftItem = function (index) {
-  draftItems.splice(index, 1);
-  renderDraft();
-};
-
-window.clearDraft = function () {
-  if (!draftItems.length) return;
-  if (!confirm("Clear the current draft?")) return;
-  draftItems = [];
-  builder = { data: {} };
-  editingDraftIndex = null;
-  renderBuilder();
-  renderReview();
-  renderDraft();
-};
-
-function renderDraft() {
-  const list = document.getElementById("draftOrderList");
-  const total = draftItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  document.getElementById("draftTotal").textContent = formatMoney(total);
-  document.getElementById("editingNotice").classList.toggle("hidden", editingDraftIndex === null);
-
-  if (!draftItems.length) {
-    list.innerHTML = `<p>No items in draft yet.</p>`;
-    return;
-  }
-
-  list.innerHTML = draftItems.map((item, index) => `
-    <div class="order-item">
-      <div class="order-item-head">
-        <div>
-          <p><strong>${item.name}</strong></p>
-          ${item.lines.map(line => `<p>${line}</p>`).join("")}
-          <p><strong>${formatMoney(item.totalPrice)}</strong></p>
-        </div>
-      </div>
-      <div class="order-actions">
-        <button type="button" class="action-btn" onclick="editDraftItem(${index})">Edit Item</button>
-        <button type="button" class="action-btn delete-btn" onclick="removeDraftItem(${index})">Remove</button>
-      </div>
-    </div>
-  `).join("");
 }
 
-window.addDraftToToday = async function () {
-  if (!draftItems.length) {
-    alert("Add at least one item first.");
-    return;
-  }
-
-  const subtotal = draftItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const mode = prompt("Payment type:\nEnter exactly:\nCash\nDigital\nSplit");
-  if (mode === null) return;
-
-  const cleanedMode = mode.trim().toLowerCase();
-  let payment = null;
-
-  if (cleanedMode === "cash") {
-    payment = { type: "cash", total: subtotal };
-  } else if (cleanedMode === "digital") {
-    const method = prompt("Enter digital method exactly:\nCash App\nApple Pay\nSquare");
-    if (method === null) return;
-    const m = method.trim();
-    if (!["Cash App", "Apple Pay", "Square"].includes(m)) {
-      alert("Enter Cash App, Apple Pay, or Square exactly.");
-      return;
-    }
-    payment = { type: "digital", method: m, total: subtotal };
-  } else if (cleanedMode === "split") {
-    const cashInput = prompt(`Sale total is ${formatMoney(subtotal)}.\nEnter CASH amount only:`);
-    if (cashInput === null) return;
-    const cashAmount = Number(cashInput);
-    if (Number.isNaN(cashAmount) || cashAmount < 0 || cashAmount > subtotal) {
-      alert("Invalid cash amount.");
-      return;
-    }
-    const digitalAmount = Number((subtotal - cashAmount).toFixed(2));
-    const method = prompt(`Digital amount is ${formatMoney(digitalAmount)}.\nEnter digital method exactly:\nCash App\nApple Pay\nSquare`);
-    if (method === null) return;
-    const m = method.trim();
-    if (!["Cash App", "Apple Pay", "Square"].includes(m)) {
-      alert("Enter Cash App, Apple Pay, or Square exactly.");
-      return;
-    }
-
-    payment = {
-      type: "split",
-      total: subtotal,
-      cashAmount,
-      digitalAmount,
-      digitalMethod: m
-    };
-  } else {
-    alert("Enter Cash, Digital, or Split.");
-    return;
-  }
-
-  const saleRef = push(ref(db, "tiaTracker/current/sales"));
-  await set(saleRef, {
-    createdAt: Date.now(),
-    createdLabel: nowLabel(),
-    subtotal,
-    payment,
-    items: clone(draftItems)
+function bindEvents() {
+  document.getElementById("datePicker").addEventListener("change", (e) => {
+    state.date = e.target.value;
   });
 
-  draftItems = [];
-  builder = { data: {} };
-  editingDraftIndex = null;
-  renderBuilder();
-  renderReview();
-  renderDraft();
-};
-
-window.removeSale = async function (saleKey) {
-  if (!confirm("Remove this sale?")) return;
-  await remove(ref(db, `tiaTracker/current/sales/${saleKey}`));
-};
-
-function renderTodaySales() {
-  const box = document.getElementById("todaySalesList");
-  const entries = Object.entries(trackerState.sales || {}).sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
-
-  box.innerHTML = entries.length
-    ? entries.map(([key, sale]) => `
-      <div class="sale-card">
-        <p><strong>${sale.createdLabel}</strong> — ${formatMoney(sale.subtotal)}</p>
-        ${sale.items.map(item => `
-          <div class="order-item">
-            <p><strong>${item.name}</strong></p>
-            ${item.lines.map(line => `<p>${line}</p>`).join("")}
-          </div>
-        `).join("")}
-        <p><strong>Payment:</strong> ${sale.payment?.type || "—"} ${sale.payment?.method || sale.payment?.digitalMethod || ""}</p>
-        <div class="order-actions">
-          <button type="button" class="action-btn delete-btn" onclick="removeSale('${key}')">Remove</button>
-        </div>
-      </div>
-    `).join("")
-    : "<p>No sales yet.</p>";
-}
-
-function renderMainScreen() {
-  renderBoxMenu();
-  renderBuilder();
-  renderReview();
-  renderDraft();
-  renderTodaySales();
-
-  const totals = totalsFromSales(trackerState.sales);
-  const { itemCounts } = getCountsFromSales(trackerState.sales);
-
-  document.getElementById("dayTotal").textContent = formatMoney(totals.dayTotal);
-  document.getElementById("cashTotal").textContent = formatMoney(totals.cash);
-  document.getElementById("cashAppTotal").textContent = formatMoney(totals.cashApp);
-  document.getElementById("applePayTotal").textContent = formatMoney(totals.applePay);
-  document.getElementById("squareTotal").textContent = formatMoney(totals.square);
-  document.getElementById("topSeller").textContent = topLabel(itemCounts);
-
-  const itemCountsBox = document.getElementById("itemCountsBox");
-  const countEntries = Object.entries(itemCounts).filter(([, count]) => count > 0);
-  itemCountsBox.innerHTML = countEntries.length
-    ? countEntries.map(([name, count]) => `<p><strong>${name}:</strong> ${count}</p>`).join("")
-    : "<p>No sales yet.</p>";
-
-  renderWeeklyStats();
-}
-
-function renderWeeklyStats() {
-  const start = getWeekStart();
-  let weekTotal = 0;
-  const weekItemCounts = {};
-
-  Object.values(trackerState.days || {}).forEach(day => {
-    const created = new Date(day.createdAt || 0);
-    if (created >= start) {
-      weekTotal += Number(day.totals?.dayTotal || 0);
-      Object.entries(day.itemCounts || {}).forEach(([k, v]) => {
-        weekItemCounts[k] = (weekItemCounts[k] || 0) + v;
-      });
-    }
+  document.getElementById("tipsInput").addEventListener("input", () => {
+    updateTotalsUI();
   });
 
-  document.getElementById("weekTotal").textContent = formatMoney(weekTotal);
-  document.getElementById("weekTopSeller").textContent = topLabel(weekItemCounts);
-}
+  document.getElementById("saveDayBtn").addEventListener("click", saveDay);
+  document.getElementById("viewDaysBtn").addEventListener("click", openAllDays);
+  document.getElementById("refreshHistoryBtn").addEventListener("click", loadHistory);
 
-window.saveDay = async function () {
-  const totals = totalsFromSales(trackerState.sales);
-  const { itemCounts, specialtyCounts } = getCountsFromSales(trackerState.sales);
-
-  if (!Object.keys(trackerState.sales || {}).length) {
-    alert("No sales to save yet.");
-    return;
-  }
-
-  await set(ref(db, `tiaTracker/days/${todayKey()}`), {
-    label: todayLabel(),
-    createdAt: Date.now(),
-    sales: clone(trackerState.sales || {}),
-    totals,
-    itemCounts,
-    specialtyCounts
+  document.getElementById("closePopupBtn").addEventListener("click", closePopup);
+  document.getElementById("popupDoneBtn").addEventListener("click", confirmPopupSale);
+  document.getElementById("popupCashBtn").addEventListener("click", () => {
+    setPopupPayment("cash");
+    updatePopupSummary();
+  });
+  document.getElementById("popupDigitalBtn").addEventListener("click", () => {
+    setPopupPayment("digital");
+    updatePopupSummary();
   });
 
-  await set(ref(db, "tiaTracker/current/sales"), {});
+  document.getElementById("closeDaysBtn").addEventListener("click", closeAllDays);
+  document.getElementById("closeDetailBtn").addEventListener("click", closeDayDetails);
 
-  draftItems = [];
-  builder = { data: {} };
-  editingDraftIndex = null;
-  renderBuilder();
-  renderReview();
-  renderDraft();
-  alert("Day saved.");
-};
-
-window.resetDay = async function () {
-  if (!confirm("Reset today without saving?")) return;
-
-  await set(ref(db, "tiaTracker/current/sales"), {});
-
-  draftItems = [];
-  builder = { data: {} };
-  editingDraftIndex = null;
-  renderBuilder();
-  renderReview();
-  renderDraft();
-  alert("Day reset.");
-};
-
-function renderHistoryScreen() {
-  const daysList = document.getElementById("historyDaysList");
-  const detail = document.getElementById("historyDetail");
-  const detailTitle = document.getElementById("historyDetailTitle");
-
-  const dayEntries = Object.entries(trackerState.days || {}).sort((a, b) => b[0].localeCompare(a[0]));
-
-  if (!dayEntries.length) {
-    daysList.innerHTML = "<p>No saved days yet.</p>";
-    detail.innerHTML = "<p>Select a day.</p>";
-    detailTitle.textContent = "Day Details";
-    return;
-  }
-
-  daysList.innerHTML = dayEntries.map(([dayKey, day]) => `
-    <div class="history-day-card">
-      <p><strong>${day.label || dayKey}</strong></p>
-      <p>Total: ${formatMoney(day.totals?.dayTotal || 0)}</p>
-      <p>Top Seller: ${topLabel(day.itemCounts || {})}</p>
-      <div class="order-actions">
-        <button type="button" class="action-btn" onclick="selectHistoryDay('${dayKey}')">View Day</button>
-      </div>
-    </div>
-  `).join("");
-
-  if (!selectedHistoryDay || !trackerState.days[selectedHistoryDay]) {
-    detail.innerHTML = "<p>Select a day.</p>";
-    detailTitle.textContent = "Day Details";
-    return;
-  }
-
-  const day = trackerState.days[selectedHistoryDay];
-  detailTitle.textContent = `Day Details — ${day.label || selectedHistoryDay}`;
-
-  detail.innerHTML = `
-    <div class="totals-box">
-      <div class="line"><span>Total</span><strong>${formatMoney(day.totals?.dayTotal || 0)}</strong></div>
-      <div class="line"><span>Cash</span><strong>${formatMoney(day.totals?.cash || 0)}</strong></div>
-      <div class="line"><span>Cash App</span><strong>${formatMoney(day.totals?.cashApp || 0)}</strong></div>
-      <div class="line"><span>Apple Pay</span><strong>${formatMoney(day.totals?.applePay || 0)}</strong></div>
-      <div class="line"><span>Square</span><strong>${formatMoney(day.totals?.square || 0)}</strong></div>
-      <div class="line"><span>Top Seller</span><strong>${topLabel(day.itemCounts || {})}</strong></div>
-    </div>
-    ${Object.values(day.sales || {}).map(sale => `
-      <div class="history-order-card">
-        <p><strong>${sale.createdLabel}</strong> — ${formatMoney(sale.subtotal)}</p>
-        ${sale.items.map(item => `
-          <div class="order-item">
-            <p><strong>${item.name}</strong></p>
-            ${item.lines.map(line => `<p>${line}</p>`).join("")}
-          </div>
-        `).join("")}
-        <p><strong>Payment:</strong> ${sale.payment?.type || "—"} ${sale.payment?.method || sale.payment?.digitalMethod || ""}</p>
-      </div>
-    `).join("")}
-  `;
-}
-
-function renderScreen() {
-  const params = new URLSearchParams(window.location.search);
-  const view = params.get("view");
-
-  document.getElementById("mainScreen").classList.toggle("hidden", view === "history");
-  document.getElementById("historyScreen").classList.toggle("hidden", view !== "history");
-
-  if (view === "history") {
-    selectedHistoryDay = params.get("day") || null;
-    renderHistoryScreen();
-  } else {
-    renderMainScreen();
-  }
-}
-
-function attachListeners() {
-  onValue(ref(db, "tiaTracker/current/sales"), snap => {
-    trackerState.sales = snap.val() || {};
-    renderScreen();
+  document.getElementById("popupOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "popupOverlay") closePopup();
   });
 
-  onValue(ref(db, "tiaTracker/days"), snap => {
-    trackerState.days = snap.val() || {};
-    renderScreen();
+  document.getElementById("daysOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "daysOverlay") closeAllDays();
+  });
+
+  document.getElementById("detailOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "detailOverlay") closeDayDetails();
   });
 }
 
-attachListeners();
-renderScreen();
+function init() {
+  renderMenus();
+  bindEvents();
+  setDefaultDate();
+  updateTotalsUI();
+  loadHistory();
+}
+
+init();
