@@ -3,7 +3,8 @@ import {
   getDatabase,
   ref,
   set,
-  onValue
+  onValue,
+  get
 } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -89,6 +90,7 @@ const popupState = {
 
 let historyCache = {};
 let historyBound = false;
+let liveBoundDate = "";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -198,6 +200,7 @@ function renderPopupOptions(options, onChoose) {
     wrap.appendChild(btn);
   });
 }
+
 function setPopupPayment(method) {
   popupState.payment = method;
   document.getElementById("popupCashBtn").classList.toggle("active", method === "cash");
@@ -291,6 +294,36 @@ function openSpecialtyLemonade() {
   );
 }
 
+function applyStateToUI() {
+  document.getElementById("snacksTotal").textContent = money(state.snacksTotal);
+  document.getElementById("lemonadeTotal").textContent = money(state.lemonadeTotal);
+  document.getElementById("cashTotal").textContent = money(state.cashTotal);
+  document.getElementById("digitalTotal").textContent = money(state.digitalTotal);
+  document.getElementById("tipsTotal").textContent = money(state.tips);
+  document.getElementById("summarySnacks").textContent = money(state.snacksTotal);
+  document.getElementById("summaryLemonade").textContent = money(state.lemonadeTotal);
+  document.getElementById("combinedTotal").textContent = money(state.snacksTotal + state.lemonadeTotal);
+  document.getElementById("summaryTips").textContent = money(state.tips);
+}
+
+async function saveLiveSession() {
+  if (!state.date) return;
+
+  const payload = {
+    date: state.date,
+    updatedAt: Date.now(),
+    snacksTotal: Number(state.snacksTotal.toFixed(2)),
+    lemonadeTotal: Number(state.lemonadeTotal.toFixed(2)),
+    cashTotal: Number(state.cashTotal.toFixed(2)),
+    digitalTotal: Number(state.digitalTotal.toFixed(2)),
+    tips: Number(state.tips.toFixed(2)),
+    entries: state.entries,
+    lastEntry: state.lastEntry
+  };
+
+  await set(ref(db, `astrosnaxxLive/${state.date}`), payload);
+}
+
 function confirmPopupSale() {
   if (!popupState.owner || !popupState.selectedAmount) {
     alert("Choose an item first.");
@@ -310,19 +343,18 @@ function confirmPopupSale() {
   }
 
   const entry = {
-  owner: popupState.owner === "snacks" ? "Snacks" : "Lemonades",
-  item: popupState.selectedLabel,
-  amount: Number(popupState.selectedAmount.toFixed(2)),
-  payment: popupState.payment
-};
+    owner: popupState.owner === "snacks" ? "Snacks" : "Lemonades",
+    item: popupState.selectedLabel,
+    amount: Number(popupState.selectedAmount.toFixed(2)),
+    payment: popupState.payment
+  };
 
-state.entries.push(entry);
-state.lastEntry = entry;
+  state.entries.push(entry);
+  state.lastEntry = entry;
 
   updateTotalsUI();
   closePopup();
 }
-
 
 function undoLast() {
   if (!state.lastEntry) {
@@ -345,23 +377,15 @@ function undoLast() {
   }
 
   state.entries.pop();
-  state.lastEntry = null;
+  state.lastEntry = state.entries.length ? state.entries[state.entries.length - 1] : null;
 
   updateTotalsUI();
 }
-function updateTotalsUI() {
-  const combined = state.snacksTotal + state.lemonadeTotal;
-  state.tips = Number(document.getElementById("tipsInput").value || 0);
 
-  document.getElementById("snacksTotal").textContent = money(state.snacksTotal);
-  document.getElementById("lemonadeTotal").textContent = money(state.lemonadeTotal);
-  document.getElementById("cashTotal").textContent = money(state.cashTotal);
-  document.getElementById("digitalTotal").textContent = money(state.digitalTotal);
-  document.getElementById("tipsTotal").textContent = money(state.tips);
-  document.getElementById("summarySnacks").textContent = money(state.snacksTotal);
-  document.getElementById("summaryLemonade").textContent = money(state.lemonadeTotal);
-  document.getElementById("combinedTotal").textContent = money(combined);
-  document.getElementById("summaryTips").textContent = money(state.tips);
+function updateTotalsUI() {
+  state.tips = Number(document.getElementById("tipsInput").value || 0);
+  applyStateToUI();
+  saveLiveSession();
 }
 
 async function saveDay() {
@@ -580,14 +604,48 @@ function loadHistory() {
   }
 }
 
+function bindLiveSession(date) {
+  if (liveBoundDate === date) return;
+  liveBoundDate = date;
+
+  onValue(ref(db, `astrosnaxxLive/${date}`), snapshot => {
+    const live = snapshot.val();
+    if (!live) {
+      state.snacksTotal = 0;
+      state.lemonadeTotal = 0;
+      state.cashTotal = 0;
+      state.digitalTotal = 0;
+      state.tips = 0;
+      state.entries = [];
+      state.lastEntry = null;
+      document.getElementById("tipsInput").value = "";
+      applyStateToUI();
+      return;
+    }
+
+    state.snacksTotal = Number(live.snacksTotal || 0);
+    state.lemonadeTotal = Number(live.lemonadeTotal || 0);
+    state.cashTotal = Number(live.cashTotal || 0);
+    state.digitalTotal = Number(live.digitalTotal || 0);
+    state.tips = Number(live.tips || 0);
+    state.entries = Array.isArray(live.entries) ? live.entries : [];
+    state.lastEntry = live.lastEntry || (state.entries.length ? state.entries[state.entries.length - 1] : null);
+
+    document.getElementById("tipsInput").value = state.tips ? String(state.tips) : "";
+    applyStateToUI();
+  });
+}
+
 function bindEvents() {
   document.getElementById("datePicker").addEventListener("change", (e) => {
     state.date = e.target.value;
+    bindLiveSession(state.date);
   });
 
   document.getElementById("tipsInput").addEventListener("input", () => {
     updateTotalsUI();
   });
+
   document.getElementById("undoBtn").addEventListener("click", undoLast);
   document.getElementById("saveDayBtn").addEventListener("click", saveDay);
   document.getElementById("viewDaysBtn").addEventListener("click", openAllDays);
@@ -620,12 +678,18 @@ function bindEvents() {
   });
 }
 
-function init() {
+async function init() {
   renderMenus();
   bindEvents();
   setDefaultDate();
+  bindLiveSession(state.date);
   updateTotalsUI();
   loadHistory();
+
+  const savedDaySnap = await get(ref(db, `astrosnaxxLive/${state.date}`));
+  if (!savedDaySnap.exists()) {
+    await saveLiveSession();
+  }
 }
 
 init();
