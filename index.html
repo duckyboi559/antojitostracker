@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Astrosnaxx Daily Sales Tracker</title>
+  <title>AstroSnaxx Order System</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,11 +16,11 @@
   <main class="app-shell">
     <header class="topbar">
       <div class="brand-box center-brand">
-        <img src="images/logo.png" alt="Astrosnaxx Logo" class="brand-logo" />
+        <img src="images/logo.png" alt="AstroSnaxx Logo" class="brand-logo" />
       </div>
 
       <div class="title-wrap">
-        <h1>Daily Sales Tracker</h1>
+        <h1>Order System</h1>
       </div>
     </header>
 
@@ -32,179 +32,126 @@
       <input type="date" id="datePicker" />
     </section>
 
-    <section class="main-grid">
-      <div class="glass-card section-card">
-        <div class="section-header">
-          <div class="owner-badge">🍿</div>
-          <h2>Snacks</h2>
-        </div>
-
-        <div class="menu-list" id="snacksMenuList"></div>
-
-        <div class="owner-total-row">
-          <span>Snacks Total</span>
-          <strong id="snacksTotal">$0.00</strong>
-        </div>
-      </div>
-
-      <div class="glass-card section-card">
-        <div class="section-header">
-          <div class="owner-badge">🍋</div>
-          <h2>Lemonades</h2>
-        </div>
-
-        <div class="menu-list" id="lemonadeMenuList"></div>
-
-        <div class="owner-total-row">
-          <span>Lemonade Total</span>
-          <strong id="lemonadeTotal">$0.00</strong>
-        </div>
+    <section class="glass-card nav-card">
+      <div class="top-actions triple-actions">
+        <button id="buildTabBtn" class="view-days-btn active-tab-btn" type="button">🧾 Build Order</button>
+        <button id="openTabBtn" class="view-days-btn" type="button">📋 Open Orders</button>
+        <button id="doneTabBtn" class="view-days-btn" type="button">✅ Handed Out</button>
       </div>
     </section>
 
-    <section class="bottom-grid">
-      <div class="glass-card payments-card">
-        <div class="section-title-row">
-          <span class="section-emoji">💳</span>
-          <h3>Payments</h3>
-        </div>
-
-        <div class="payment-totals">
-          <div class="payment-total cash-box">
-            <div class="small-label">Cash Total</div>
-            <div id="cashTotal">$0.00</div>
+    <!-- BUILD ORDER -->
+    <section id="buildScreen" class="screen-section active-screen">
+      <div class="main-grid">
+        <div class="glass-card section-card">
+          <div class="section-header">
+            <div class="owner-badge">🍿</div>
+            <h2>Snacks</h2>
           </div>
 
-          <div class="payment-total digital-box">
-            <div class="small-label">Digital Total</div>
-            <div id="digitalTotal">$0.00</div>
+          <div class="menu-list" id="snacksMenuList"></div>
+        </div>
+
+        <div class="glass-card section-card">
+          <div class="section-header">
+            <div class="owner-badge">🍋</div>
+            <h2>Lemonades</h2>
+          </div>
+
+          <div class="menu-list" id="lemonadeMenuList"></div>
+        </div>
+      </div>
+
+      <section class="glass-card draft-card">
+        <div class="draft-top">
+          <div class="section-title-row">
+            <span class="section-emoji">🛒</span>
+            <h3>Current Order</h3>
+          </div>
+
+          <div class="draft-top-actions">
+            <button id="clearDraftBtn" class="refresh-btn danger-btn" type="button">Clear</button>
           </div>
         </div>
-      </div>
 
-      <div class="glass-card tips-card">
-        <div class="section-title-row">
-          <span class="section-emoji">🫙</span>
-          <h3>Tips</h3>
+        <div class="draft-controls">
+          <div class="field-block">
+            <label class="field-label" for="customerNameInput">Customer Name / Note</label>
+            <input id="customerNameInput" type="text" placeholder="Optional" />
+          </div>
+
+          <div class="field-block">
+            <div class="field-label">Payment</div>
+            <div class="payment-pick-buttons">
+              <button id="draftCashBtn" class="popup-pay-btn active" type="button">Cash</button>
+              <button id="draftDigitalBtn" class="popup-pay-btn" type="button">Digital</button>
+            </div>
+          </div>
         </div>
 
-        <div class="tips-input-wrap">
-          <span class="tips-dollar">$</span>
-          <input type="number" id="tipsInput" min="0" step="0.01" placeholder="Enter total tips" />
-        </div>
+        <div id="draftItems" class="detail-entries"></div>
 
-        <div class="tips-total-box">
-          <div class="small-label">Total Tips</div>
-          <div id="tipsTotal">$0.00</div>
+        <div class="draft-footer">
+          <div class="detail-total-box">
+            <div class="small-label">Order Total</div>
+            <div class="value" id="draftTotal">$0.00</div>
+          </div>
+
+          <button id="sendOrderBtn" class="save-day-btn" type="button">
+            <span>🚀</span>
+            <span>Send to Open Orders</span>
+          </button>
         </div>
-      </div>
+      </section>
     </section>
 
-    <section class="glass-card summary-card">
-      <div class="section-title-row">
-        <span class="section-emoji">🧮</span>
-        <h3>Summary</h3>
-      </div>
+    <!-- OPEN ORDERS -->
+    <section id="openScreen" class="screen-section">
+      <section class="glass-card history-card">
+        <div class="history-top">
+          <div class="section-title-row">
+            <span class="section-emoji">📋</span>
+            <h3>Open Orders</h3>
+          </div>
+          <div class="small-live-note">Live synced</div>
+        </div>
 
-      <div class="summary-grid">
-        <div class="summary-item">
-          <div class="small-label">Snacks Total</div>
-          <div id="summarySnacks">$0.00</div>
-        </div>
-        <div class="summary-item">
-          <div class="small-label">Lemonade Total</div>
-          <div id="summaryLemonade">$0.00</div>
-        </div>
-        <div class="summary-item">
-          <div class="small-label">Combined Total</div>
-          <div id="combinedTotal">$0.00</div>
-        </div>
-        <div class="summary-item">
-          <div class="small-label">Total Tips</div>
-          <div id="summaryTips">$0.00</div>
-        </div>
-      </div>
+        <div id="openOrdersList" class="order-list"></div>
+      </section>
     </section>
 
-    <div class="top-actions">
-      <button id="saveDayBtn" class="save-day-btn" type="button">
-        <span class="save-icon">💾</span>
-        <span>Save Day</span>
-      </button>
-
-      <button id="viewDaysBtn" class="view-days-btn" type="button">
-        <span>📖</span>
-        <span>View Previous Days</span>
-      </button>
-
-      <button id="undoBtn" class="view-days-btn" type="button">
-        <span>↩</span>
-        <span>Undo Last</span>
-      </button>
-    </div>
-
-    <section class="glass-card history-card">
-      <div class="history-top">
-        <div class="section-title-row">
-          <span class="section-emoji">📅</span>
-          <h3>Previous Days</h3>
+    <!-- HANDED OUT -->
+    <section id="doneScreen" class="screen-section">
+      <section class="glass-card history-card">
+        <div class="history-top">
+          <div class="section-title-row">
+            <span class="section-emoji">✅</span>
+            <h3>Handed Out</h3>
+          </div>
+          <div class="small-live-note">Auto hides after 1 minute</div>
         </div>
 
-        <button id="refreshHistoryBtn" class="refresh-btn" type="button">⟳ Refresh</button>
-      </div>
-
-      <div id="historyList" class="history-list"></div>
+        <div id="doneOrdersList" class="order-list"></div>
+      </section>
     </section>
   </main>
 
-  <!-- POPUP -->
+  <!-- ITEM POPUP -->
   <div id="popupOverlay" class="popup-overlay hidden">
     <div class="popup-card">
       <div class="popup-head">
-        <h4 id="popupTitle">Add Sale</h4>
+        <h4 id="popupTitle">Add Item</h4>
         <button id="closePopupBtn" class="close-popup" type="button">✕</button>
       </div>
 
       <div id="popupStepTitle" class="popup-step-title"></div>
       <div id="popupOptions" class="popup-options"></div>
 
-      <div class="payment-pick">
-        <div class="payment-pick-label">Payment</div>
-        <div class="payment-pick-buttons">
-          <button id="popupCashBtn" class="popup-pay-btn active" type="button">Cash</button>
-          <button id="popupDigitalBtn" class="popup-pay-btn" type="button">Digital</button>
-        </div>
-      </div>
-
-      <div id="popupSummary" class="popup-summary">Nothing selected yet.</div>
+      <div class="popup-summary" id="popupSummary">Nothing selected yet.</div>
 
       <div class="popup-actions">
-        <button id="popupDoneBtn" class="popup-done-btn" type="button">Add to Total</button>
+        <button id="popupDoneBtn" class="popup-done-btn" type="button">Add Item</button>
       </div>
-    </div>
-  </div>
-
-  <!-- ALL DAYS -->
-  <div id="daysOverlay" class="popup-overlay hidden">
-    <div class="popup-card large-popup">
-      <div class="popup-head">
-        <h4>All Previous Days</h4>
-        <button id="closeDaysBtn" class="close-popup" type="button">✕</button>
-      </div>
-      <div id="allDaysList" class="full-days-list"></div>
-    </div>
-  </div>
-
-  <!-- DAY DETAILS -->
-  <div id="detailOverlay" class="popup-overlay hidden">
-    <div class="popup-card large-popup">
-      <div class="popup-head">
-        <h4 id="detailTitle">Day Details</h4>
-        <button id="closeDetailBtn" class="close-popup" type="button">✕</button>
-      </div>
-
-      <div id="detailTotals" class="detail-totals"></div>
-      <div id="detailEntries" class="detail-entries"></div>
     </div>
   </div>
 
