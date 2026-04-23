@@ -20,7 +20,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// SNACKS
+// MENUS
 const SNACK_ITEMS = [
   { id: "chip_locos", name: "Chip Locos", emoji: "🌶️", price: 8, sub: "Pepino, jicama, cueritos, mango, cacahuates, chaca chaca, chamoy, limon, tajin" },
   { id: "chip_esquite", name: "Chip Esquite", emoji: "🌽", price: 9, sub: "Elote, mayonesa, mantequilla, queso" },
@@ -30,7 +30,6 @@ const SNACK_ITEMS = [
   { id: "esquite_cheetos", name: "Esquite Con Cheetos", emoji: "🧀", price: 7, sub: "With Cheetos" }
 ];
 
-// LEMONADES
 const LEMONADE_FLAVORS = [
   "Strawberry",
   "Watermelon",
@@ -70,28 +69,31 @@ const lemonadeMenuButtons = [
   { id: "specialty", name: "Specialty Lemonade", emoji: "⭐" }
 ];
 
+// STATE
 const state = {
-  lastEntry: null,
   date: "",
-  snacksTotal: 0,
-  lemonadeTotal: 0,
-  cashTotal: 0,
-  digitalTotal: 0,
-  tips: 0,
-  entries: []
+  live: {
+    openOrders: {},
+    doneOrders: {}
+  },
+  draft: {
+    customerName: "",
+    payment: "cash",
+    items: []
+  }
 };
 
 const popupState = {
   owner: "",
-  payment: "cash",
+  mode: "",
   selectedLabel: "",
   selectedAmount: 0
 };
 
-let historyCache = {};
-let historyBound = false;
 let liveBoundDate = "";
+let liveTickInterval = null;
 
+// HELPERS
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -103,20 +105,77 @@ function todayLocalValue() {
   return local.toISOString().split("T")[0];
 }
 
-function formatDateForDisplay(dateString) {
-  if (!dateString) return "";
-  const [year, month, day] = dateString.split("-");
-  return `${month}/${day}/${year}`;
+function formatTimer(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-function setDefaultDate() {
-  const datePicker = document.getElementById("datePicker");
-  if (!datePicker.value) {
-    datePicker.value = todayLocalValue();
-  }
-  state.date = datePicker.value;
+function activeScreenButton(btnId) {
+  ["buildTabBtn", "openTabBtn", "doneTabBtn"].forEach(id => {
+    document.getElementById(id).classList.remove("active-tab-btn");
+  });
+  document.getElementById(btnId).classList.add("active-tab-btn");
 }
 
+function showScreen(screenId, btnId) {
+  ["buildScreen", "openScreen", "doneScreen"].forEach(id => {
+    document.getElementById(id).classList.remove("active-screen");
+  });
+  document.getElementById(screenId).classList.add("active-screen");
+  activeScreenButton(btnId);
+}
+
+function draftTotal() {
+  return state.draft.items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+}
+
+function currentOpenOrdersArray() {
+  return Object.entries(state.live.openOrders || {}).map(([id, order]) => ({
+    id,
+    ...order
+  })).sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+}
+
+function currentDoneOrdersArray() {
+  return Object.entries(state.live.doneOrders || {}).map(([id, order]) => ({
+    id,
+    ...order
+  })).sort((a, b) => Number(b.handedOutAt || 0) - Number(a.handedOutAt || 0));
+}
+
+function buildDisplayTime(order) {
+  if (!order.createdAt) return "0:00";
+  return formatTimer(Date.now() - Number(order.createdAt));
+}
+
+function makeOrderId() {
+  return `order_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// LIVE SYNC
+async function saveLiveState() {
+  if (!state.date) return;
+  await set(ref(db, `astrosnaxxOrders/${state.date}`), state.live);
+}
+
+function bindLiveState(date) {
+  if (liveBoundDate === date) return;
+  liveBoundDate = date;
+
+  onValue(ref(db, `astrosnaxxOrders/${date}`), snapshot => {
+    const data = snapshot.val() || { openOrders: {}, doneOrders: {} };
+    state.live = {
+      openOrders: data.openOrders || {},
+      doneOrders: data.doneOrders || {}
+    };
+    renderOpenOrders();
+    renderDoneOrders();
+  });
+}
+
+// MENUS
 function renderMenus() {
   const snacksMenuList = document.getElementById("snacksMenuList");
   const lemonadeMenuList = document.getElementById("lemonadeMenuList");
@@ -142,7 +201,7 @@ function buildMenuRow(item, owner) {
       <div class="menu-icon">${item.emoji}</div>
       <div class="menu-name">${item.name}</div>
     </div>
-    <button class="menu-open-btn" type="button">Open</button>
+    <button class="menu-open-btn" type="button">Add</button>
   `;
 
   row.querySelector(".menu-open-btn").addEventListener("click", () => {
@@ -155,26 +214,24 @@ function buildMenuRow(item, owner) {
 function handleMenuOpen(owner, id) {
   if (owner === "snacks") {
     const snack = SNACK_ITEMS.find(item => item.id === id);
-    if (snack) openSimpleSale("snacks", snack.name, snack.price, snack.sub);
+    if (snack) openSimpleItem("snacks", snack.name, snack.price, snack.sub);
     return;
   }
 
-  if (id === "classic") openSimpleSale("lemonade", "Classic Lemonade", 6, "Regular classic lemonade");
+  if (id === "classic") openSimpleItem("lemonade", "Classic Lemonade", 6, "Regular classic lemonade");
   if (id === "flavored") openFlavorLemonade();
   if (id === "specialty") openSpecialtyLemonade();
 }
 
+// POPUP
 function openPopup(title, stepTitle = "") {
   document.getElementById("popupTitle").textContent = title;
   document.getElementById("popupStepTitle").textContent = stepTitle;
   document.getElementById("popupOptions").innerHTML = "";
   document.getElementById("popupOverlay").classList.remove("hidden");
 
-  popupState.payment = "cash";
   popupState.selectedLabel = "";
   popupState.selectedAmount = 0;
-
-  setPopupPayment("cash");
   updatePopupSummary();
 }
 
@@ -201,26 +258,19 @@ function renderPopupOptions(options, onChoose) {
   });
 }
 
-function setPopupPayment(method) {
-  popupState.payment = method;
-  document.getElementById("popupCashBtn").classList.toggle("active", method === "cash");
-  document.getElementById("popupDigitalBtn").classList.toggle("active", method === "digital");
-}
-
 function updatePopupSummary() {
   const box = document.getElementById("popupSummary");
-
   if (!popupState.selectedLabel) {
     box.textContent = "Nothing selected yet.";
     return;
   }
-
-  box.textContent = `${popupState.selectedLabel} • ${money(popupState.selectedAmount)} • ${popupState.payment}`;
+  box.textContent = `${popupState.selectedLabel} • ${money(popupState.selectedAmount)}`;
 }
 
-function openSimpleSale(owner, name, amount, sub = "") {
+function openSimpleItem(owner, name, amount, sub = "") {
   popupState.owner = owner;
-  openPopup(name, "Choose payment, then tap Add to Total.");
+  popupState.mode = "simple";
+  openPopup(name, "Tap Add Item to add this to the order.");
 
   popupState.selectedLabel = name;
   popupState.selectedAmount = amount;
@@ -236,6 +286,7 @@ function openSimpleSale(owner, name, amount, sub = "") {
 
 function openFlavorLemonade() {
   popupState.owner = "lemonade";
+  popupState.mode = "flavored";
   openPopup("Flavor Lemonade", "Tap every flavor used. Each one adds $1.");
 
   const selectedFlavors = [];
@@ -261,14 +312,12 @@ function openFlavorLemonade() {
         clickedBtn.classList.add("active");
       }
 
-      const total = 6 + selectedFlavors.length;
-
       if (selectedFlavors.length === 0) {
         popupState.selectedLabel = "";
         popupState.selectedAmount = 0;
       } else {
         popupState.selectedLabel = `Flavor Lemonade - ${selectedFlavors.join(", ")}`;
-        popupState.selectedAmount = total;
+        popupState.selectedAmount = 6 + selectedFlavors.length;
       }
 
       updatePopupSummary();
@@ -278,6 +327,7 @@ function openFlavorLemonade() {
 
 function openSpecialtyLemonade() {
   popupState.owner = "lemonade";
+  popupState.mode = "specialty";
   openPopup("Specialty Lemonade", "Choose a specialty.");
 
   renderPopupOptions(
@@ -294,402 +344,290 @@ function openSpecialtyLemonade() {
   );
 }
 
-function applyStateToUI() {
-  document.getElementById("snacksTotal").textContent = money(state.snacksTotal);
-  document.getElementById("lemonadeTotal").textContent = money(state.lemonadeTotal);
-  document.getElementById("cashTotal").textContent = money(state.cashTotal);
-  document.getElementById("digitalTotal").textContent = money(state.digitalTotal);
-  document.getElementById("tipsTotal").textContent = money(state.tips);
-  document.getElementById("summarySnacks").textContent = money(state.snacksTotal);
-  document.getElementById("summaryLemonade").textContent = money(state.lemonadeTotal);
-  document.getElementById("combinedTotal").textContent = money(state.snacksTotal + state.lemonadeTotal);
-  document.getElementById("summaryTips").textContent = money(state.tips);
-}
-
-async function saveLiveSession() {
-  if (!state.date) return;
-
-  const payload = {
-    date: state.date,
-    updatedAt: Date.now(),
-    snacksTotal: Number(state.snacksTotal.toFixed(2)),
-    lemonadeTotal: Number(state.lemonadeTotal.toFixed(2)),
-    cashTotal: Number(state.cashTotal.toFixed(2)),
-    digitalTotal: Number(state.digitalTotal.toFixed(2)),
-    tips: Number(state.tips.toFixed(2)),
-    entries: state.entries,
-    lastEntry: state.lastEntry
-  };
-
-  await set(ref(db, `astrosnaxxLive/${state.date}`), payload);
-}
-
-function confirmPopupSale() {
-  if (!popupState.owner || !popupState.selectedAmount) {
+function confirmPopupItem() {
+  if (!popupState.selectedLabel || !popupState.selectedAmount) {
     alert("Choose an item first.");
     return;
   }
 
-  if (popupState.owner === "snacks") {
-    state.snacksTotal += popupState.selectedAmount;
-  } else {
-    state.lemonadeTotal += popupState.selectedAmount;
-  }
+  state.draft.items.push({
+    owner: popupState.owner,
+    label: popupState.selectedLabel,
+    amount: Number(popupState.selectedAmount.toFixed(2))
+  });
 
-  if (popupState.payment === "cash") {
-    state.cashTotal += popupState.selectedAmount;
-  } else {
-    state.digitalTotal += popupState.selectedAmount;
-  }
-
-  const entry = {
-    owner: popupState.owner === "snacks" ? "Snacks" : "Lemonades",
-    item: popupState.selectedLabel,
-    amount: Number(popupState.selectedAmount.toFixed(2)),
-    payment: popupState.payment
-  };
-
-  state.entries.push(entry);
-  state.lastEntry = entry;
-
-  updateTotalsUI();
+  renderDraft();
   closePopup();
 }
 
-function undoLast() {
-  if (!state.lastEntry) {
-    alert("Nothing to undo.");
+// DRAFT
+function renderDraft() {
+  const wrap = document.getElementById("draftItems");
+  const totalEl = document.getElementById("draftTotal");
+
+  if (!state.draft.items.length) {
+    wrap.innerHTML = `
+      <div class="detail-entry">
+        <div class="detail-entry-top">
+          <span>No items yet</span>
+          <span>$0.00</span>
+        </div>
+        <div class="detail-entry-sub">Add snacks or lemonades to build an order.</div>
+      </div>
+    `;
+    totalEl.textContent = "$0.00";
     return;
   }
 
-  const last = state.lastEntry;
+  wrap.innerHTML = "";
+  state.draft.items.forEach((item, index) => {
+    const box = document.createElement("div");
+    box.className = "detail-entry";
+    box.innerHTML = `
+      <div class="detail-entry-top">
+        <span>${item.label}</span>
+        <span>${money(item.amount)}</span>
+      </div>
+      <div class="detail-entry-sub">${item.owner === "snacks" ? "Snack" : "Lemonade"}</div>
+      <div class="order-card-actions">
+        <button class="order-small-btn remove-btn" data-remove-index="${index}" type="button">Remove</button>
+      </div>
+    `;
+    wrap.appendChild(box);
+  });
 
-  if (last.owner === "Snacks") {
-    state.snacksTotal -= last.amount;
-  } else {
-    state.lemonadeTotal -= last.amount;
-  }
+  wrap.querySelectorAll("[data-remove-index]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.dataset.removeIndex);
+      state.draft.items.splice(index, 1);
+      renderDraft();
+    });
+  });
 
-  if (last.payment === "cash") {
-    state.cashTotal -= last.amount;
-  } else {
-    state.digitalTotal -= last.amount;
-  }
-
-  state.entries.pop();
-  state.lastEntry = state.entries.length ? state.entries[state.entries.length - 1] : null;
-
-  updateTotalsUI();
+  totalEl.textContent = money(draftTotal());
 }
 
-function updateTotalsUI() {
-  state.tips = Number(document.getElementById("tipsInput").value || 0);
-  applyStateToUI();
-  saveLiveSession();
+function clearDraft() {
+  state.draft.items = [];
+  state.draft.customerName = "";
+  document.getElementById("customerNameInput").value = "";
+  renderDraft();
 }
 
-async function saveDay() {
-  const date = document.getElementById("datePicker").value;
-
-  if (!date) {
-    alert("Please select a date first.");
+async function sendDraftOrder() {
+  if (!state.draft.items.length) {
+    alert("Add at least one item first.");
     return;
   }
 
-  state.date = date;
-  state.tips = Number(document.getElementById("tipsInput").value || 0);
-
-  const payload = {
-    date,
-    createdAt: Date.now(),
-    snacksTotal: Number(state.snacksTotal.toFixed(2)),
-    lemonadeTotal: Number(state.lemonadeTotal.toFixed(2)),
-    combinedTotal: Number((state.snacksTotal + state.lemonadeTotal).toFixed(2)),
-    cashTotal: Number(state.cashTotal.toFixed(2)),
-    digitalTotal: Number(state.digitalTotal.toFixed(2)),
-    tips: Number(state.tips.toFixed(2)),
-    entries: state.entries
+  const orderId = makeOrderId();
+  const order = {
+    id: orderId,
+    customerName: document.getElementById("customerNameInput").value.trim(),
+    payment: state.draft.payment,
+    items: state.draft.items,
+    total: draftTotal(),
+    createdAt: Date.now()
   };
 
-  try {
-    await set(ref(db, `astrosnaxxDailySales/${date}`), payload);
-    alert("Day saved.");
-  } catch (error) {
-    console.error(error);
-    alert("Could not save the day. Check your Firebase setup.");
-  }
+  state.live.openOrders[orderId] = order;
+  await saveLiveState();
+
+  clearDraft();
+  showScreen("openScreen", "openTabBtn");
 }
 
-function renderHistoryRows(data) {
-  const historyList = document.getElementById("historyList");
-  const rows = Object.values(data || {}).sort((a, b) => {
-    if ((a?.date || "") < (b?.date || "")) return 1;
-    if ((a?.date || "") > (b?.date || "")) return -1;
-    return 0;
-  });
+// OPEN / DONE
+function renderOpenOrders() {
+  const wrap = document.getElementById("openOrdersList");
+  const orders = currentOpenOrdersArray();
 
-  historyList.innerHTML = "";
-
-  if (!rows.length) {
-    historyList.innerHTML = `
-      <div class="history-row">
-        <div class="history-date">No saved days yet.</div>
-      </div>
-    `;
-    return;
-  }
-
-  rows.slice(0, 5).forEach(day => {
-    const row = buildDayRow(day);
-    historyList.appendChild(row);
-  });
-}
-
-function buildDayRow(day) {
-  const row = document.createElement("div");
-  row.className = "day-list-row";
-
-  row.innerHTML = `
-    <div class="history-date">
-      <span>📅</span>
-      <span>${formatDateForDisplay(day.date)}</span>
-    </div>
-
-    <div class="history-stat snacks">
-      <div class="label">Snacks</div>
-      <div class="value">${money(day.snacksTotal)}</div>
-    </div>
-
-    <div class="history-stat lemonade">
-      <div class="label">Lemonades</div>
-      <div class="value">${money(day.lemonadeTotal)}</div>
-    </div>
-
-    <div class="history-stat cash">
-      <div class="label">Cash</div>
-      <div class="value">${money(day.cashTotal)}</div>
-    </div>
-
-    <div class="history-stat digital">
-      <div class="label">Digital</div>
-      <div class="value">${money(day.digitalTotal)}</div>
-    </div>
-
-    <div class="history-stat tips">
-      <div class="label">Tips</div>
-      <div class="value">${money(day.tips)}</div>
-    </div>
-
-    <div class="history-arrow">›</div>
-  `;
-
-  row.addEventListener("click", () => openDayDetails(day));
-  return row;
-}
-
-function renderAllDaysList() {
-  const list = document.getElementById("allDaysList");
-  const rows = Object.values(historyCache || {}).sort((a, b) => {
-    if ((a?.date || "") < (b?.date || "")) return 1;
-    if ((a?.date || "") > (b?.date || "")) return -1;
-    return 0;
-  });
-
-  list.innerHTML = "";
-
-  if (!rows.length) {
-    list.innerHTML = `<div class="history-row"><div class="history-date">No saved days yet.</div></div>`;
-    return;
-  }
-
-  rows.forEach(day => {
-    list.appendChild(buildDayRow(day));
-  });
-}
-
-function openAllDays() {
-  renderAllDaysList();
-  document.getElementById("daysOverlay").classList.remove("hidden");
-}
-
-function closeAllDays() {
-  document.getElementById("daysOverlay").classList.add("hidden");
-}
-
-function openDayDetails(day) {
-  document.getElementById("detailTitle").textContent = `Day Details - ${formatDateForDisplay(day.date)}`;
-
-  document.getElementById("detailTotals").innerHTML = `
-    <div class="detail-total-box">
-      <div class="small-label">Snacks</div>
-      <div class="value">${money(day.snacksTotal)}</div>
-    </div>
-    <div class="detail-total-box">
-      <div class="small-label">Lemonades</div>
-      <div class="value">${money(day.lemonadeTotal)}</div>
-    </div>
-    <div class="detail-total-box">
-      <div class="small-label">Cash</div>
-      <div class="value">${money(day.cashTotal)}</div>
-    </div>
-    <div class="detail-total-box">
-      <div class="small-label">Digital</div>
-      <div class="value">${money(day.digitalTotal)}</div>
-    </div>
-    <div class="detail-total-box">
-      <div class="small-label">Tips</div>
-      <div class="value">${money(day.tips)}</div>
-    </div>
-  `;
-
-  const entriesWrap = document.getElementById("detailEntries");
-  entriesWrap.innerHTML = "";
-
-  const entries = Array.isArray(day.entries) ? day.entries : [];
-
-  if (!entries.length) {
-    entriesWrap.innerHTML = `<div class="detail-entry"><div class="detail-entry-top">No item details saved for this day.</div></div>`;
-  } else {
-    entries.forEach(entry => {
-      const box = document.createElement("div");
-      box.className = "detail-entry";
-      box.innerHTML = `
-        <div class="detail-entry-top">
-          <span>${entry.owner}</span>
-          <span>${money(entry.amount)}</span>
+  if (!orders.length) {
+    wrap.innerHTML = `
+      <div class="order-card">
+        <div class="order-card-top">
+          <span>No open orders</span>
+          <span>📭</span>
         </div>
-        <div class="detail-entry-sub">${entry.item}</div>
-        <div class="detail-entry-sub">Payment: ${entry.payment}</div>
-      `;
-      entriesWrap.appendChild(box);
-    });
+        <div class="order-card-sub">New orders will show here live.</div>
+      </div>
+    `;
+    return;
   }
 
-  document.getElementById("detailOverlay").classList.remove("hidden");
-}
+  wrap.innerHTML = "";
+  orders.forEach(order => {
+    const box = document.createElement("div");
+    box.className = "order-card";
 
-function closeDayDetails() {
-  document.getElementById("detailOverlay").classList.add("hidden");
-}
+    const itemsHtml = order.items.map(item => `
+      <div class="order-card-sub">• ${item.label} — ${money(item.amount)}</div>
+    `).join("");
 
-function loadHistory() {
-  const historyList = document.getElementById("historyList");
-
-  if (!historyBound) {
-    historyList.innerHTML = `
-      <div class="history-row">
-        <div class="history-date">Loading...</div>
+    box.innerHTML = `
+      <div class="order-card-top">
+        <span>${order.customerName || "Walk-up Order"}</span>
+        <span>${money(order.total)}</span>
+      </div>
+      <div class="order-card-sub">Payment: ${order.payment}</div>
+      ${itemsHtml}
+      <div class="timer-chip">Timer: ${buildDisplayTime(order)}</div>
+      <div class="order-card-actions">
+        <button class="order-small-btn edit-btn" data-edit-id="${order.id}" type="button">Edit</button>
+        <button class="order-small-btn done-btn" data-done-id="${order.id}" type="button">Handed Out</button>
+        <button class="order-small-btn remove-btn" data-remove-id="${order.id}" type="button">Delete</button>
       </div>
     `;
 
-    onValue(
-      ref(db, "astrosnaxxDailySales"),
-      (snapshot) => {
-        historyCache = snapshot.val() || {};
-        renderHistoryRows(historyCache);
-      },
-      (error) => {
-        console.error(error);
-        historyList.innerHTML = `
-          <div class="history-row">
-            <div class="history-date">Could not load history.</div>
-          </div>
-        `;
-      }
-    );
+    wrap.appendChild(box);
+  });
 
-    historyBound = true;
-  } else {
-    renderHistoryRows(historyCache);
-  }
-}
+  wrap.querySelectorAll("[data-done-id]").forEach(btn => {
+    btn.addEventListener("click", () => markOrderDone(btn.dataset.doneId));
+  });
 
-function bindLiveSession(date) {
-  if (liveBoundDate === date) return;
-  liveBoundDate = date;
+  wrap.querySelectorAll("[data-remove-id]").forEach(btn => {
+    btn.addEventListener("click", () => deleteOpenOrder(btn.dataset.removeId));
+  });
 
-  onValue(ref(db, `astrosnaxxLive/${date}`), snapshot => {
-    const live = snapshot.val();
-    if (!live) {
-      state.snacksTotal = 0;
-      state.lemonadeTotal = 0;
-      state.cashTotal = 0;
-      state.digitalTotal = 0;
-      state.tips = 0;
-      state.entries = [];
-      state.lastEntry = null;
-      document.getElementById("tipsInput").value = "";
-      applyStateToUI();
-      return;
-    }
-
-    state.snacksTotal = Number(live.snacksTotal || 0);
-    state.lemonadeTotal = Number(live.lemonadeTotal || 0);
-    state.cashTotal = Number(live.cashTotal || 0);
-    state.digitalTotal = Number(live.digitalTotal || 0);
-    state.tips = Number(live.tips || 0);
-    state.entries = Array.isArray(live.entries) ? live.entries : [];
-    state.lastEntry = live.lastEntry || (state.entries.length ? state.entries[state.entries.length - 1] : null);
-
-    document.getElementById("tipsInput").value = state.tips ? String(state.tips) : "";
-    applyStateToUI();
+  wrap.querySelectorAll("[data-edit-id]").forEach(btn => {
+    btn.addEventListener("click", () => editOpenOrder(btn.dataset.editId));
   });
 }
 
+function renderDoneOrders() {
+  const wrap = document.getElementById("doneOrdersList");
+  const orders = currentDoneOrdersArray().filter(order => {
+    return Date.now() - Number(order.handedOutAt || 0) < 60000;
+  });
+
+  if (!orders.length) {
+    wrap.innerHTML = `
+      <div class="order-card">
+        <div class="order-card-top">
+          <span>No recent handed out orders</span>
+          <span>✨</span>
+        </div>
+        <div class="order-card-sub">Completed orders stay here for 1 minute.</div>
+      </div>
+    `;
+    return;
+  }
+
+  wrap.innerHTML = "";
+  orders.forEach(order => {
+    const box = document.createElement("div");
+    box.className = "order-card";
+
+    const itemsHtml = order.items.map(item => `
+      <div class="order-card-sub">• ${item.label} — ${money(item.amount)}</div>
+    `).join("");
+
+    box.innerHTML = `
+      <div class="order-card-top">
+        <span>${order.customerName || "Walk-up Order"}</span>
+        <span>${money(order.total)}</span>
+      </div>
+      <div class="order-card-sub">Payment: ${order.payment}</div>
+      <div class="timer-chip">Finished in ${formatTimer(Number(order.handedOutAt || 0) - Number(order.createdAt || 0))}</div>
+      ${itemsHtml}
+    `;
+
+    wrap.appendChild(box);
+  });
+}
+
+async function markOrderDone(orderId) {
+  const order = state.live.openOrders[orderId];
+  if (!order) return;
+
+  const doneOrder = {
+    ...order,
+    handedOutAt: Date.now()
+  };
+
+  state.live.doneOrders[orderId] = doneOrder;
+  delete state.live.openOrders[orderId];
+
+  await saveLiveState();
+}
+
+async function deleteOpenOrder(orderId) {
+  if (!state.live.openOrders[orderId]) return;
+  delete state.live.openOrders[orderId];
+  await saveLiveState();
+}
+
+async function editOpenOrder(orderId) {
+  const order = state.live.openOrders[orderId];
+  if (!order) return;
+
+  state.draft.items = JSON.parse(JSON.stringify(order.items || []));
+  state.draft.payment = order.payment || "cash";
+  document.getElementById("customerNameInput").value = order.customerName || "";
+  setDraftPayment(state.draft.payment);
+
+  delete state.live.openOrders[orderId];
+  await saveLiveState();
+
+  renderDraft();
+  showScreen("buildScreen", "buildTabBtn");
+}
+
+// PAYMENT
+function setDraftPayment(method) {
+  state.draft.payment = method;
+  document.getElementById("draftCashBtn").classList.toggle("active", method === "cash");
+  document.getElementById("draftDigitalBtn").classList.toggle("active", method === "digital");
+}
+
+// EVENTS
 function bindEvents() {
   document.getElementById("datePicker").addEventListener("change", (e) => {
     state.date = e.target.value;
-    bindLiveSession(state.date);
+    bindLiveState(state.date);
   });
 
-  document.getElementById("tipsInput").addEventListener("input", () => {
-    updateTotalsUI();
-  });
+  document.getElementById("buildTabBtn").addEventListener("click", () => showScreen("buildScreen", "buildTabBtn"));
+  document.getElementById("openTabBtn").addEventListener("click", () => showScreen("openScreen", "openTabBtn"));
+  document.getElementById("doneTabBtn").addEventListener("click", () => showScreen("doneScreen", "doneTabBtn"));
 
-  document.getElementById("undoBtn").addEventListener("click", undoLast);
-  document.getElementById("saveDayBtn").addEventListener("click", saveDay);
-  document.getElementById("viewDaysBtn").addEventListener("click", openAllDays);
-  document.getElementById("refreshHistoryBtn").addEventListener("click", loadHistory);
+  document.getElementById("draftCashBtn").addEventListener("click", () => setDraftPayment("cash"));
+  document.getElementById("draftDigitalBtn").addEventListener("click", () => setDraftPayment("digital"));
+
+  document.getElementById("clearDraftBtn").addEventListener("click", clearDraft);
+  document.getElementById("sendOrderBtn").addEventListener("click", sendDraftOrder);
 
   document.getElementById("closePopupBtn").addEventListener("click", closePopup);
-  document.getElementById("popupDoneBtn").addEventListener("click", confirmPopupSale);
-  document.getElementById("popupCashBtn").addEventListener("click", () => {
-    setPopupPayment("cash");
-    updatePopupSummary();
-  });
-  document.getElementById("popupDigitalBtn").addEventListener("click", () => {
-    setPopupPayment("digital");
-    updatePopupSummary();
-  });
-
-  document.getElementById("closeDaysBtn").addEventListener("click", closeAllDays);
-  document.getElementById("closeDetailBtn").addEventListener("click", closeDayDetails);
+  document.getElementById("popupDoneBtn").addEventListener("click", confirmPopupItem);
 
   document.getElementById("popupOverlay").addEventListener("click", (e) => {
     if (e.target.id === "popupOverlay") closePopup();
   });
-
-  document.getElementById("daysOverlay").addEventListener("click", (e) => {
-    if (e.target.id === "daysOverlay") closeAllDays();
-  });
-
-  document.getElementById("detailOverlay").addEventListener("click", (e) => {
-    if (e.target.id === "detailOverlay") closeDayDetails();
-  });
 }
 
+// INIT
 async function init() {
+  const datePicker = document.getElementById("datePicker");
+  datePicker.value = todayLocalValue();
+  state.date = datePicker.value;
+
   renderMenus();
   bindEvents();
-  setDefaultDate();
-  bindLiveSession(state.date);
-  updateTotalsUI();
-  loadHistory();
+  setDraftPayment("cash");
+  renderDraft();
+  bindLiveState(state.date);
 
-  const savedDaySnap = await get(ref(db, `astrosnaxxLive/${state.date}`));
-  if (!savedDaySnap.exists()) {
-    await saveLiveSession();
+  const existing = await get(ref(db, `astrosnaxxOrders/${state.date}`));
+  if (!existing.exists()) {
+    await saveLiveState();
   }
+
+  if (liveTickInterval) clearInterval(liveTickInterval);
+  liveTickInterval = setInterval(() => {
+    renderOpenOrders();
+    renderDoneOrders();
+  }, 1000);
 }
 
 init();
